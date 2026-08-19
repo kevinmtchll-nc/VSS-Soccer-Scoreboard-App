@@ -205,6 +205,13 @@ main { padding: 1rem 1.5rem 2rem; }
 .gc-middle { text-align:center; min-width:10rem; }
 .gc-status { color:#8dd4ff; font-weight:700; }
 .gc-grid { display:grid; grid-template-columns:minmax(260px,.75fr) minmax(330px,1.15fr) minmax(280px,.9fr); gap:1rem; margin-top:1rem; }
+.layout-hint { margin:.75rem 0 0; color:var(--muted); font-size:.85rem; }
+.draggable-panel { transition:opacity .15s ease, outline-color .15s ease; }
+.draggable-panel>h2 { display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none; }
+.draggable-panel>h2:active { cursor:grabbing; }
+.draggable-panel.dragging { opacity:.45; }
+.draggable-panel.drag-over { outline:2px solid #43a8ff; outline-offset:2px; }
+.drag-indicator { color:#7c93ad; letter-spacing:-.18em; padding-right:.18em; }
 .panel { border:1px solid #263246; border-radius:1rem; padding:1rem; background:rgba(15,22,33,var(--theme-panel-alpha,.94)); }
 .panel h2 { margin:0 0 .75rem; font-size:1rem; color:#a9c8ee; }
 .matchup-name { font-size:1.3rem; font-weight:800; }

@@ -66,4 +66,17 @@ if (-not (Test-Path -LiteralPath $outputMsi)) {
     throw "Installer compiler reported success but did not create $outputMsi"
 }
 
-Write-Host "Installer created: $outputMsi"
+# Do not publish a package that merely exists while WiX is still writing it.
+# Opening the Property table through Windows Installer verifies the compound
+# file, MSI database, and embedded cabinet directory are readable.
+$windowsInstaller = New-Object -ComObject WindowsInstaller.Installer
+$database = $windowsInstaller.OpenDatabase($outputMsi, 0)
+$view = $database.OpenView("SELECT `Value` FROM `Property` WHERE `Property` = 'ProductName'")
+$view.Execute()
+$record = $view.Fetch()
+$productName = if ($null -ne $record) { $record.StringData(1) } else { '' }
+if ($productName -ne 'VITEC Soccer Scoreboard') {
+    throw "Installer validation failed. Expected VITEC Soccer Scoreboard but found '$productName'."
+}
+
+Write-Host "Installer created and validated: $outputMsi"

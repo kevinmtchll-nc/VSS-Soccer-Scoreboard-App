@@ -11,6 +11,7 @@ secrets.json
 artifacts/
 VSS Soccer Scoreboard APP/
 installer/third-party/
+~$*.docx
 
 *.env
 appsettings.Local.json

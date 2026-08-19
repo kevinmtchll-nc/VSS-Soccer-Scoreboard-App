@@ -224,6 +224,7 @@ if (!string.IsNullOrWhiteSpace(pgConnection))
         }));
 
     builder.Services.AddSingleton<HistoricalPitchStore>();
+    builder.Services.AddSingleton<SoccerMatchHistoryStore>();
 }
 
 var app = builder.Build();
@@ -1350,6 +1351,85 @@ app.MapGet("/api/soccer/daily-summary", async (string? date, ISoccerStatsClient 
     var key = $"soccer:daily:{target:yyyy-MM-dd}";
     if (!cache.TryGetValue(key, out SoccerDailySummary? summary)) { summary = await soccer.GetDailySummaryAsync(target, ct); cache.Set(key, summary, TimeSpan.FromSeconds(30)); }
     return Results.Ok(summary);
+});
+
+app.MapGet("/api/soccer/history", async (string? date, int? limit, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { configured = false, message = "PostgreSQL is not configured.", matches = Array.Empty<object>() });
+    try
+    {
+        var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : (DateOnly?)null;
+        var matches = await store.ListAsync(targetDate, limit ?? 100, ct);
+        return Results.Ok(new { configured = true, canConnect = true, matches });
+    }
+    catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+    {
+        return Results.Json(new { configured = true, canConnect = false, message = ex.Message, matches = Array.Empty<object>() }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapGet("/api/soccer/history/{matchId}", async (string matchId, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { message = "PostgreSQL is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    try
+    {
+        var snapshot = await store.GetAsync(matchId, ct);
+        return snapshot is null ? Results.NotFound() : Results.Text(snapshot.PayloadJson, "application/json");
+    }
+    catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+    {
+        return Results.Json(new { configured = true, canConnect = false, message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/soccer/history/capture/{matchId}", async (string matchId, string? date, ISoccerStatsClient soccer, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { message = "PostgreSQL is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    try
+    {
+        var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : (DateOnly?)null;
+        var matchCenter = await soccer.GetMatchCenterAsync(matchId, targetDate, ct);
+        var saved = await store.CaptureAsync(matchCenter, ct);
+        return Results.Ok(new { message = "MLS MatchCenter snapshot saved.", snapshot = saved });
+    }
+    catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+    {
+        return Results.Json(new { configured = true, canConnect = false, message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+});
+
+app.MapPost("/api/soccer/history/capture-date", async (string? date, ISoccerStatsClient soccer, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { message = "PostgreSQL is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    try
+    {
+        var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
+        var matches = await soccer.GetScheduleAsync(targetDate, ct);
+        var saved = 0;
+        var failed = new List<object>();
+        foreach (var match in matches)
+        {
+            try
+            {
+                var matchCenter = await soccer.GetMatchCenterAsync(match.MatchId, targetDate, ct);
+                await store.CaptureAsync(matchCenter, ct);
+                saved++;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or KeyNotFoundException)
+            {
+                failed.Add(new { matchId = match.MatchId, message = ex.Message });
+            }
+        }
+        return Results.Ok(new { date = targetDate, matches = matches.Count, saved, failed });
+    }
+    catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+    {
+        return Results.Json(new { configured = true, canConnect = false, message = ex.Message }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 });
 
 app.MapGet("/api/soccer/workspaces", (SoccerWorkspaceStore store) => Results.Ok(new[] { SoccerWorkspaceStore.Default() }.Concat(store.List())));

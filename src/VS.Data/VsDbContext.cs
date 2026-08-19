@@ -8,6 +8,7 @@ public sealed class VsDbContext(DbContextOptions<VsDbContext> options) : DbConte
     public DbSet<GameEntity> Games => Set<GameEntity>();
     public DbSet<PitchEntity> Pitches => Set<PitchEntity>();
     public DbSet<IngestionLogEntity> IngestionLogs => Set<IngestionLogEntity>();
+    public DbSet<SoccerMatchSnapshotEntity> SoccerMatchSnapshots => Set<SoccerMatchSnapshotEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +61,25 @@ public sealed class VsDbContext(DbContextOptions<VsDbContext> options) : DbConte
             b.Property(x => x.Result).HasMaxLength(30);
             b.Property(x => x.Message).HasMaxLength(500);
             b.HasIndex(x => new { x.GamePk, x.CompletedAtUtc });
+        });
+
+        modelBuilder.Entity<SoccerMatchSnapshotEntity>(b =>
+        {
+            b.ToTable("soccer_match_snapshots");
+            b.HasKey(x => x.MatchId);
+            b.Property(x => x.MatchId).HasColumnName("match_id").HasMaxLength(80);
+            b.Property(x => x.MatchDate).HasColumnName("match_date");
+            b.Property(x => x.PlannedKickoff).HasColumnName("planned_kickoff");
+            b.Property(x => x.Status).HasColumnName("status").HasMaxLength(40);
+            b.Property(x => x.Competition).HasColumnName("competition").HasMaxLength(120);
+            b.Property(x => x.AwayTeam).HasColumnName("away_team").HasMaxLength(120);
+            b.Property(x => x.HomeTeam).HasColumnName("home_team").HasMaxLength(120);
+            b.Property(x => x.AwayScore).HasColumnName("away_score");
+            b.Property(x => x.HomeScore).HasColumnName("home_score");
+            b.Property(x => x.PayloadJson).HasColumnName("payload_json").HasColumnType("jsonb");
+            b.Property(x => x.CapturedAtUtc).HasColumnName("captured_at_utc");
+            b.HasIndex(x => x.MatchDate);
+            b.HasIndex(x => x.PlannedKickoff);
         });
     }
 }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>VITEC Soccer Scoreboard</title>
+  <link rel="stylesheet" href="/site.css?v=0.1.0" />
+</head>
+<body>
+  <header class="app-header">
+    <div><div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC" /><h1>VITEC Soccer Scoreboard</h1></div><p>VS · MLS Live Scoreboard v0.1.0</p></div>
+    <div class="header-actions"><input id="matchDate" type="date" /><a href="/setup.html">Settings</a><button id="refresh" type="button">Refresh</button></div>
+  </header>
+  <main class="page-shell">
+    <div class="section-heading-row"><h2 id="matchCount">MLS matches</h2><span id="updated" class="muted"></span></div>
+    <section id="matches" class="scoreboard-grid" aria-live="polite"></section>
+    <section class="leaders-section"><div class="section-heading-row"><h2>Today's Leaders and Highlights</h2><span class="muted">Soccer categories will update with the scoreboard</span></div>
+      <div class="daily-leaders-grid"><article class="panel"><h3>Offense</h3><p class="muted">Goals · Assists · Shots · Expected Goals</p></article><article class="panel"><h3>Goalkeeping</h3><p class="muted">Saves · Clean Sheets</p></article><article class="panel"><h3>Possession</h3><p class="muted">Passes · Pass Completion · Chances Created</p></article><article class="panel"><h3>Defense</h3><p class="muted">Tackles · Interceptions · Clearances</p></article></div>
+    </section>
+  </main>
+  <script src="/soccer.js?v=0.1.0"></script>
+</body>
+</html>

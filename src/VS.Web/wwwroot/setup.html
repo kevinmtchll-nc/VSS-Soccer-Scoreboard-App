@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" />
+  <title>VITEC Scoreboard · System / Database</title>
+  <link rel="stylesheet" href="/site.css?v=0.8.64" />
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC" /><h1>VITEC Scoreboard</h1></div>
+      <p>VS · System / Database v0.8.64</p>
+    </div>
+    <div class="toolbar">
+      <a class="back-link" href="/">← Scoreboard</a>
+      <a class="back-link" href="/standings.html">Standings</a>
+      <a class="button-link" href="/help.html">Help</a>
+      <a class="button-link" href="/setup.html">Settings</a>
+      <button id="refreshStatus" type="button">Refresh Status</button>
+    </div>
+  </header>
+
+  <main class="setup-shell">
+    <section class="setup-grid">
+      <article class="panel">
+        <h2>Application</h2>
+        <dl class="status-list">
+          <div><dt>Version</dt><dd id="appVersion">—</dd></div>
+          <div><dt>Service</dt><dd id="serviceName">—</dd></div>
+          <div><dt>Listen URL</dt><dd id="listenUrl">—</dd></div>
+          <div><dt>Settings file</dt><dd id="settingsFile">—</dd></div>
+        </dl>
+        <label>
+          <span class="control-label">Webpage Port</span>
+          <input id="listenPort" type="number" min="1024" max="65535" value="5000" />
+        </label>
+        <div class="setup-actions"><button id="saveNetworkSettings" type="button">Save Listening Port</button></div>
+        <div id="networkSettingsBanner" class="setup-banner">Changing the port requires a service restart.</div>
+      </article>
+
+      <article class="panel">
+        <h2>Display Settings</h2>
+        <p class="muted">
+          Game start times are displayed in the selected time zone. Server Local follows the Windows server's current time zone automatically.
+        </p>
+        <label>
+          <span class="control-label">Display Time Zone</span>
+          <select id="displayTimeZone"></select>
+        </label>
+        <p id="timeZoneEffective" class="muted setup-note">Loading time-zone settings…</p>
+        <div class="setup-actions">
+          <button id="saveDisplaySettings" type="button">Save Display Time Zone</button>
+        </div>
+        <div id="displaySettingsBanner" class="setup-banner">—</div>
+      </article>
+
+      <article class="panel">
+        <h2>PostgreSQL</h2>
+        <div id="dbBanner" class="setup-banner">Checking…</div>
+
+        <details class="nested-settings-section">
+          <summary>Initial Local Database Setup</summary>
+          <p class="muted">For a new computer, enter the existing PostgreSQL administrator password and choose the initial VITEC application password. VITEC will create or update the local <strong>vsapp</strong> account and <strong>vitec_scoreboard</strong> database.</p>
+          <div class="password-requirements"><strong>VITEC application password requirements</strong><span>12â€“128 characters</span><span>Uppercase and lowercase letters</span><span>At least one number</span><span>At least one special character: ! @ # $ % ^ &amp; * - _</span><span>No spaces</span></div>
+          <div class="db-config-grid"><label><span>PostgreSQL administrator username</span><input id="pgAdminUsername" type="text" value="postgres" /></label><label><span>PostgreSQL administrator password</span><input id="pgAdminPassword" type="password" autocomplete="current-password" /></label><label><span>VITEC application username</span><input id="pgAppUsername" type="text" value="vsapp" /></label><label><span>Initial VITEC application password</span><input id="pgAppPassword" type="password" autocomplete="new-password" /></label><label><span>Confirm application password</span><input id="pgAppPasswordConfirm" type="password" autocomplete="new-password" /></label></div>
+          <div class="setup-actions"><button id="provisionPostgres" type="button">Configure Local PostgreSQL</button></div><div id="provisionPostgresBanner" class="setup-banner">Use this once when setting up a new computer.</div>
+        </details>
+
+        <div class="db-config-grid">
+          <label>
+            <span class="control-label">Server / Host</span>
+            <input id="pgHost" type="text" placeholder="localhost" />
+          </label>
+          <label>
+            <span class="control-label">Port</span>
+            <input id="pgPort" type="number" min="1" max="65535" value="5432" />
+          </label>
+          <label>
+            <span class="control-label">Database</span>
+            <input id="pgDatabase" type="text" placeholder="vitec_scoreboard" />
+          </label>
+          <label>
+            <span class="control-label">Username</span>
+            <input id="pgUsername" type="text" placeholder="postgres" />
+          </label>
+          <label class="db-password-field">
+            <span class="control-label">Password</span>
+            <input id="pgPassword" type="password" autocomplete="new-password"
+                   placeholder="Leave blank to keep saved password" />
+          </label>
+        </div>
+
+        <div class="setup-actions">
+          <button id="testDbConnection" type="button">Test Connection</button>
+          <button id="saveDbSettings" type="button">Save PostgreSQL Settings</button>
+          <button id="initializeDb" type="button">Initialize Database Schema</button>
+        </div>
+
+        <dl class="status-list db-status-list">
+          <div><dt>Configured</dt><dd id="dbConfigured">—</dd></div>
+          <div><dt>Connected</dt><dd id="dbConnected">—</dd></div>
+          <div><dt>Games stored</dt><dd id="dbGames">—</dd></div>
+          <div><dt>Pitches stored</dt><dd id="dbPitches">—</dd></div>
+          <div><dt>Latest game date</dt><dd id="dbLatest">—</dd></div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <h2>Historical Import</h2>
+        <p class="muted">
+          Import a completed MLB date into PostgreSQL. Existing pitches are not duplicated.
+        </p>
+        <label>
+          <span class="control-label">MLB date</span>
+          <input id="importDate" type="date" />
+        </label>
+        <div class="setup-actions">
+          <button id="importDateButton" type="button">Import This Date</button>
+        </div>
+        <pre id="importResult" class="setup-log"></pre>
+      </article>
+
+      <article class="panel">
+        <h2>What VS stores</h2>
+        <p class="muted">
+          VS stores normalized game and pitch records in PostgreSQL, not repeated copies of the full MLB live-feed JSON.
+          Each pitch is protected from duplication by game ID plus MLB play ID.
+        </p>
+        <p class="muted">
+          Historical scopes in GameCenter use this local database for 7-day, 30-day and season analytics.
+        </p>
+      </article>
+      <article class="panel">
+        <h2>Historical Export</h2>
+        <p class="muted">Export stored PostgreSQL game and pitch records for a selected date.</p>
+        <label><span class="control-label">Export date</span><input id="exportDate" type="date" /></label>
+        <div class="setup-actions"><button id="exportJson" type="button">Export JSON</button><button id="exportCsv" type="button">Export CSV</button></div>
+        <div id="exportResult" class="setup-banner">Choose a date and export format.</div>
+      </article>
+    </section>
+
+    <section id="eztvIntegrationSection" class="panel integration-panel">
+      <h2>EZ TV and Output Integration</h2>
+      <p class="muted">Use these local URLs as EZ TV dynamic-data sources. Devices must be able to reach this VITEC Scoreboard computer on its configured TCP listening port.</p>
+      <div class="integration-url-list">
+        <label><span>JSON dynamic-data feed</span><input id="eztvJsonUrl" type="text" readonly /></label>
+        <label><span>XML dynamic-data feed</span><input id="eztvXmlUrl" type="text" readonly /></label>
+      </div>
+      <div class="game-picker">
+        <label><span>Game date</span><input id="outputGameDate" type="date" /></label>
+        <label><span>Choose a game</span><select id="outputGamePicker"><option value="">Loading games...</option></select></label>
+        <button id="refreshOutputGames" type="button">Refresh Games</button>
+      </div>
+      <input id="outputGamePk" type="hidden" />
+      <fieldset class="schema-selector">
+        <legend>Output Schema</legend>
+        <label class="schema-all"><input id="schemaAll" type="checkbox" value="all" checked /> All Data</label>
+        <div class="schema-team-grid">
+          <fieldset><legend>Away Team</legend><label><input class="schema-option" type="checkbox" value="away-offense" /> Offense</label><label><input class="schema-option" type="checkbox" value="away-defense" /> Defense</label><label><input class="schema-option" type="checkbox" value="away-pitching" /> Pitching</label><label><input class="schema-option" type="checkbox" value="away-baserunning" /> Baserunning</label></fieldset>
+          <fieldset><legend>Home Team</legend><label><input class="schema-option" type="checkbox" value="home-offense" /> Offense</label><label><input class="schema-option" type="checkbox" value="home-defense" /> Defense</label><label><input class="schema-option" type="checkbox" value="home-pitching" /> Pitching</label><label><input class="schema-option" type="checkbox" value="home-baserunning" /> Baserunning</label></fieldset>
+        </div>
+      </fieldset>
+      <div class="setup-actions"><a id="jsonPreviewLink" class="button-link" target="_blank" rel="noopener">Open JSON Preview</a><a id="xmlPreviewLink" class="button-link" target="_blank" rel="noopener">Open XML Preview</a></div>
+    </section>
+
+    <section class="panel integration-panel">
+      <h2>GameCenter Settings</h2>
+      <p class="muted">Open GameCenter appearance and layout tools or edit reusable video-output workspace templates.</p>
+      <div class="setup-actions"><a id="gameCenterAppearanceLink" class="button-link" href="/gamecenter.html?settings=appearance">Colors &amp; Background</a><a id="gameCenterLayoutLink" class="button-link" href="/gamecenter.html?settings=layout">Edit Current GameCenter Layout</a><a id="workspaceEditorLink" class="button-link" href="/output.html?scene=game-workspace&edit=1" target="_blank" rel="noopener">Open Workspace Editor</a></div>
+    </section>
+
+    <section id="videoOutputSection" class="panel integration-panel video-output-panel">
+      <h2>Multicast and SRT Video Output</h2>
+      <p class="muted">The video helper renders the selected clean scene in a private background process and sends an H.264 MPEG transport stream through FFmpeg. Check Output is an independent preview that may be moved or closed without interrupting the stream.</p>
+      <div class="game-picker">
+        <label><span>Game date</span><input id="videoGameDate" type="date" /></label>
+        <label><span>Choose a game</span><select id="videoGamePicker"><option value="">Loading games...</option></select></label>
+        <button id="refreshVideoGames" type="button">Refresh Games</button>
+      </div>
+      <div id="videoOutputBanner" class="setup-banner">Checking video output helper...</div>
+      <div class="video-config-grid">
+        <label><span>FFmpeg executable</span><input id="videoFfmpegPath" type="text" value="C:\ffmpeg\bin\ffmpeg.exe" /></label>
+        <label><span>Protocol</span><select id="videoProtocol"><option value="udp">UDP Multicast</option><option value="srt">SRT Caller</option></select></label>
+        <label><span>Destination address</span><input id="videoDestination" type="text" value="239.10.10.10" /></label>
+        <label><span>Port</span><input id="videoPort" type="number" min="1" max="65535" value="5004" /></label>
+        <label><span>Scene</span><select id="videoScene"><option value="gamecenter-standard" selected>GameCenter Standard View</option><option value="game-broadcast">Game Broadcast</option><option value="game-broadcast-lbar">Game Broadcast + L-Bar Ads</option><option value="game-broadcast-bottom">Game Broadcast + Bottom Bar Ad</option><option value="game-workspace">Custom Workspace Template</option></select></label>
+        <label id="videoTemplateField"><span>Workspace Template</span><select id="videoTemplate"><option value="default">Default Workspace</option></select></label>
+        <input id="videoGamePk" type="hidden" />
+        <label><span>Resolution</span><select id="videoResolution"><option value="1280x720">1280 x 720</option><option value="1920x1080" selected>1920 x 1080</option><option value="3840x2160">3840 x 2160</option></select></label>
+        <label><span>Frame rate</span><select id="videoFrameRate"><option value="25">25 fps</option><option value="30" selected>30 fps</option><option value="50">50 fps</option><option value="60">60 fps</option></select></label>
+        <label><span>Video bitrate (Kbps)</span><input id="videoBitrate" type="number" min="500" max="50000" value="6000" /></label>
+        <label id="srtLatencyField"><span>SRT latency (ms)</span><input id="videoSrtLatency" type="number" min="20" max="8000" value="120" /></label>
+      </div>
+      <div class="setup-actions">
+        <button id="saveVideoSettings" type="button">Save Video Settings</button>
+        <button id="startVideoOutput" type="button">Start Video Output</button>
+        <button id="stopVideoOutput" type="button">Stop Video Output</button>
+      </div>
+      <dl class="status-list video-status-list">
+        <div><dt>Helper connected</dt><dd id="videoHelperConnected">No</dd></div>
+        <div><dt>Encoder running</dt><dd id="videoEncoderRunning">No</dd></div>
+        <div><dt>Output</dt><dd id="videoOutputUrl">—</dd></div>
+        <div><dt>FFmpeg process</dt><dd id="videoProcessId">—</dd></div>
+      </dl>
+      <div class="setup-actions video-preview-actions">
+        <a id="checkVideoOutput" class="button-link" target="_blank" rel="noopener">Check Output</a>
+      </div>
+    </section>
+
+    <section class="panel integration-panel advertising-panel">
+      <h2>L-Bar Advertising Media</h2>
+      <p class="muted">Upload separate media for the left rail and bottom banner. Each position accepts PNG, JPG, WebP, GIF, MP4, or WebM up to 250 MB. Videos play muted and loop automatically.</p>
+      <div class="ad-size-guide">
+        <strong>Recommended media sizes</strong>
+        <span>Right rail: 840 × 1680 for 4K, 420 × 840 for 1080p, or 280 × 560 for 720p (1:2 ratio).</span>
+        <span>Bottom banner: 3840 × 480 for 4K, 1920 × 240 for 1080p, or 1280 × 160 for 720p (approximately 8:1).</span>
+        <span>Other dimensions are accepted, but media fills the slot and may be cropped.</span>
+        <span>Media within 3% of the recommended aspect ratio is left unchanged. Other media is scaled and center-cropped automatically; the uploaded original is preserved.</span>
+      </div>
+      <div id="advertisingBanner" class="setup-banner">Loading advertising media...</div>
+      <div class="advertising-upload-grid">
+        <article>
+          <h3>Left Rail</h3>
+          <p id="railAdStatus" class="muted">No media uploaded.</p>
+          <input id="railAdFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" />
+          <div class="setup-actions"><button id="uploadRailAd" type="button">Upload Left Rail</button><button id="removeRailAd" type="button">Remove</button></div>
+        </article>
+        <article>
+          <h3>Bottom Banner</h3>
+          <p id="bannerAdStatus" class="muted">No media uploaded.</p>
+          <input id="bannerAdFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" />
+          <div class="setup-actions"><button id="uploadBannerAd" type="button">Upload Bottom Banner</button><button id="removeBannerAd" type="button">Remove</button></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel integration-panel">
+      <h2>Change PostgreSQL Password</h2>
+      <div class="password-requirements"><strong>Password requirements</strong><span>12â€“128 characters</span><span>At least one uppercase letter</span><span>At least one lowercase letter</span><span>At least one number</span><span>At least one special character: ! @ # $ % ^ &amp; * - _</span><span>No spaces</span></div>
+      <div class="db-config-grid"><label><span>Current password</span><input id="currentDbPassword" type="password" autocomplete="current-password" /></label><label><span>New password</span><input id="newDbPassword" type="password" autocomplete="new-password" /></label><label><span>Confirm new password</span><input id="confirmDbPassword" type="password" autocomplete="new-password" /></label></div>
+      <ul id="passwordChecklist" class="password-checklist"></ul>
+      <div class="setup-actions"><button id="changeDbPassword" type="button">Change Password</button></div><div id="passwordChangeBanner" class="setup-banner">Enter the current and new passwords.</div>
+    </section>
+
+    <section class="panel integration-panel">
+      <h2>PostgreSQL User Management</h2>
+      <p class="muted">Add, change, disable, or remove PostgreSQL login accounts. The active VITEC application account is protected from accidental removal.</p>
+      <div id="postgresUsersBanner" class="setup-banner">Loading PostgreSQL users...</div>
+      <div id="postgresUsersList" class="postgres-users-list"></div>
+      <h3>Add User</h3>
+      <div class="db-config-grid"><label><span>Username</span><input id="newDbUsername" type="text" /></label><label><span>Password</span><input id="newDbUserPassword" type="password" autocomplete="new-password" /></label><label><span>Confirm password</span><input id="confirmDbUserPassword" type="password" autocomplete="new-password" /></label></div>
+      <div class="password-requirements"><span>Use 12â€“128 characters with uppercase, lowercase, a number, and one of ! @ # $ % ^ &amp; * - _. Spaces are not allowed.</span></div>
+      <div class="setup-actions"><button id="addDbUser" type="button">Add User</button></div>
+    </section>
+  </main>
+
+  <script src="/setup.js?v=0.8.64"></script>
+</body>
+</html>

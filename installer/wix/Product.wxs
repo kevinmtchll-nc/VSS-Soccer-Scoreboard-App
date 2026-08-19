@@ -1,0 +1,118 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:firewall="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="VITEC Soccer Scoreboard"
+           Manufacturer="VITEC"
+           Version="0.1.0"
+           Language="1033"
+           Codepage="1252"
+           UpgradeCode="4B6EA89C-AE01-489B-932A-DC01846AF03D"
+           Scope="perMachine"
+           Compressed="yes">
+
+    <SummaryInformation Description="VITEC Soccer Scoreboard Windows Service" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of VITEC Soccer Scoreboard is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <util:CloseApplication Id="CloseVideoOutputHelper"
+                           Target="VITEC.SoccerVideoOutput.exe"
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           Timeout="5"
+                           TerminateProcess="1"
+                           RebootPrompt="no" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="VITECFOLDER" Name="VITEC">
+        <Directory Id="INSTALLFOLDER" Name="Soccer Scoreboard">
+          <Component Id="VideoOutputStartup" Guid="29E5E29C-1B30-4BDD-8B47-339E18870DB6" Bitness="always64">
+            <RegistryValue Root="HKLM"
+                           Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                           Name="VITEC Soccer Scoreboard Video Output"
+                           Type="string"
+                           Value="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Start-VideoOutput.ps1&quot;"
+                           KeyPath="yes" />
+          </Component>
+          <Component Id="VITECScoreboardServiceHost" Guid="EB96C21B-250D-4E2A-8327-EDE8A933C42A" Bitness="always64">
+              <File Id="VITECScoreboardExecutable" Source="$(PublishDirectory)\VITEC.SoccerScoreboard.exe" KeyPath="yes" />
+              <ServiceInstall Id="VITECScoreboardService"
+                              Name="VITECSoccerScoreboard"
+                              DisplayName="VITEC Soccer Scoreboard"
+                              Description="VITEC Soccer Scoreboard live MLS scoring and MatchCenter service."
+                              Type="ownProcess"
+                              Start="auto"
+                              ErrorControl="normal"
+                              Account="LocalSystem"
+                              Arguments="--windows-service">
+                <util:ServiceConfig FirstFailureActionType="restart"
+                                    SecondFailureActionType="restart"
+                                    ThirdFailureActionType="restart"
+                                    RestartServiceDelayInSeconds="5"
+                                    ResetPeriodInDays="1" />
+              </ServiceInstall>
+              <ServiceControl Id="VITECScoreboardServiceControl"
+                              Name="VITECSoccerScoreboard"
+                              Stop="both"
+                              Remove="both"
+                              Start="install"
+                              Wait="yes" />
+              <firewall:FirewallException Id="VITECScoreboardFirewall"
+                                          Name="VITEC Soccer Scoreboard TCP 5100"
+                                          Port="5100"
+                                          Protocol="tcp"
+                                          Scope="any" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="PROGRAMDATAVITEC" Name="VITEC Soccer Scoreboard">
+        <Component Id="PreservedSettings" Guid="7CFC76F4-8F45-4D55-914C-4B5652298546"
+                   Bitness="always64" Permanent="yes" NeverOverwrite="yes">
+          <File Id="SettingsFile" Source="$(ProjectRoot)\config\vssettings.template.json"
+                Name="vssettings.json" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="VITEC Soccer Scoreboard" Level="1">
+      <Files Include="$(PublishDirectory)\**" Directory="INSTALLFOLDER">
+        <Exclude Files="$(PublishDirectory)\*.pdb" />
+        <Exclude Files="$(PublishDirectory)\VITEC.SoccerScoreboard.exe" />
+      </Files>
+      <ComponentRef Id="VITECScoreboardServiceHost" />
+      <ComponentRef Id="PreservedSettings" />
+      <ComponentRef Id="VideoOutputStartup" />
+    </Feature>
+
+    <CustomAction Id="StartVideoOutputHelper"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]Start-VideoOutput.ps1&quot;"
+                  Execute="immediate"
+                  Return="check"
+                  Impersonate="yes" />
+    <InstallExecuteSequence>
+      <Custom Action="StartVideoOutputHelper"
+              After="InstallFinalize"
+              Condition="NOT REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+      <Publish Dialog="WelcomeDlg"
+               Control="Next"
+               Event="NewDialog"
+               Value="InstallDirDlg"
+               Order="2"
+               Condition="NOT Installed" />
+      <Publish Dialog="InstallDirDlg"
+               Control="Back"
+               Event="NewDialog"
+               Value="WelcomeDlg"
+               Order="2"
+               Condition="NOT Installed" />
+    </UI>
+
+  </Package>
+</Wix>

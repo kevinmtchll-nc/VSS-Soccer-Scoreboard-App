@@ -1,0 +1,25 @@
+namespace VS.Core.Models;
+
+public sealed record LiveEvent(
+    string Event,
+    string EventType,
+    string Description,
+    bool IsScoringPlay,
+    bool HasOut,
+    bool HasReview,
+    int? CaptivatingIndex,
+    string Batter,
+    int? BatterId,
+    string Pitcher,
+    int? PitcherId,
+    int Rbi,
+    double? ExitVelocity,
+    double? LaunchAngle,
+    double? DistanceFeet,
+    string Trajectory,
+    string Hardness,
+    string StartBase,
+    string EndBase,
+    bool RunnerScored,
+    bool RunnerRbi,
+    int? OutsOnPlay);

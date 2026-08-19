@@ -1,0 +1,26 @@
+namespace VS.Core.Models;
+
+public sealed record Pitch(
+    string PlayId,
+    int AtBatIndex,
+    int PitchNumber,
+    string PitchCode,
+    string PitchType,
+    string Result,
+    double? StartSpeedMph,
+    double? EndSpeedMph,
+    double? PlateX,
+    double? PlateZ,
+    double? StrikeZoneTop,
+    double? StrikeZoneBottom,
+    double? SpinRate,
+    double? HorizontalBreak,
+    double? VerticalBreak,
+    double? Extension,
+    int? Zone,
+    int? BatterId,
+    string Batter,
+    int? PitcherId,
+    string Pitcher,
+    string BatSide,
+    string PitchHand);

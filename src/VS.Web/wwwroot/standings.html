@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" href="/favicon.ico" />
+  <title>VITEC Scoreboard · Standings</title>
+  <link rel="stylesheet" href="/site.css?v=0.8.64" />
+</head>
+<body>
+  <header>
+    <div>
+      <div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC" /><h1>VITEC Scoreboard</h1></div>
+      <p>VS · MLB Standings v0.8.64</p>
+    </div>
+    <div class="toolbar">
+      <a class="back-link" href="/">Scoreboard</a>
+      <a class="back-link active-nav" href="/standings.html">Standings</a>
+      <a class="button-link" href="/setup.html">Settings</a>
+      <button id="refreshStandings" type="button">Refresh</button>
+    </div>
+  </header>
+
+  <main class="standings-shell">
+    <section class="statusbar">
+      <span id="standingsStatus">Loading MLB standings…</span>
+      <span id="standingsUpdated"></span>
+    </section>
+
+    <section class="league-tabs">
+      <button type="button" class="league-tab active" data-league="103">American League</button>
+      <button type="button" class="league-tab" data-league="104">National League</button>
+    </section>
+
+    <section id="standingsDivisions" class="standings-divisions"></section>
+
+    <section class="wildcard-section">
+      <div class="wildcard-section-heading">
+        <div>
+          <span id="wildCardLeagueLabel" class="standings-league">American League</span>
+          <h2>Wild Card Standings</h2>
+        </div>
+        <span class="muted">Top 3 non-division leaders are shown as Wild Card positions.</span>
+      </div>
+
+      <article class="panel wildcard-panel">
+        <div class="standings-table-wrap">
+          <table class="standings-table wildcard-table">
+            <thead>
+              <tr>
+                <th class="team-col">Team</th>
+                <th>W</th>
+                <th>L</th>
+                <th>PCT</th>
+                <th>WCGB</th>
+                <th>Last 10</th>
+                <th>Streak</th>
+                <th>Home</th>
+                <th>Away</th>
+                <th>Run Diff</th>
+              </tr>
+            </thead>
+            <tbody id="wildCardTableBody"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <template id="divisionTemplate">
+    <article class="panel standings-division">
+      <div class="standings-heading">
+        <div>
+          <span class="standings-league"></span>
+          <h2 class="standings-division-name"></h2>
+        </div>
+      </div>
+      <div class="standings-table-wrap">
+        <table class="standings-table">
+          <thead>
+            <tr>
+              <th class="team-col">Team</th>
+              <th>W</th>
+              <th>L</th>
+              <th>PCT</th>
+              <th>GB</th>
+              <th>WCGB</th>
+              <th>Last 10</th>
+              <th>Streak</th>
+              <th>Home</th>
+              <th>Away</th>
+              <th>Run Diff</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </article>
+  </template>
+
+  <script src="/standings.js?v=0.8.64"></script>
+</body>
+</html>

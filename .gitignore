@@ -1,0 +1,16 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+appsettings.Development.json
+.env
+secrets.json
+.tools/
+.wix/
+artifacts/
+VSS Soccer Scoreboard APP/
+installer/third-party/
+
+*.env
+appsettings.Local.json

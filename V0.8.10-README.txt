@@ -1,0 +1,30 @@
+VITEC Scoreboard v0.8.10 System + Standings Fix
+
+DISPLAY TIME ZONE
+- Fixes empty Display Time Zone dropdown.
+- Root cause: loadDisplaySettings() was not called on initial page load.
+- Time zones now load when System / Database opens.
+- Save Display Settings saves the chosen VS display time zone to ProgramData.
+- Server Local remains the default.
+
+POSTGRESQL
+- Adds editable Host, Port, Database, Username and Password fields.
+- Test Connection button.
+- Save PostgreSQL Settings button.
+- Actual Npgsql/PostgreSQL connection error is displayed.
+- Password is never returned to the browser after save.
+- Blank password field preserves an already saved password.
+- Settings saved to:
+    C:\ProgramData\VITEC Scoreboard\vssettings.json
+- Database status and Initialize Schema use the current saved connection dynamically.
+
+STANDINGS
+- Real division names:
+    AL East / Central / West
+    NL East / Central / West
+- Adds separate Wild Card table for the selected league.
+- Top 3 non-division leaders highlighted as WC positions.
+- W, L, PCT, WCGB, Last 10, Streak, Home, Away, Run Differential.
+
+Update:
+  installer\Update-System-Standings-Fix.cmd

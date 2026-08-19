@@ -1,0 +1,8 @@
+{
+  "VS": {
+    "ListenUrl": "http://0.0.0.0:5100"
+  },
+  "ConnectionStrings": {
+    "VSPostgres": "Host=localhost;Port=5432;Database=vitec_soccer_scoreboard;Username=vsapp;Password=CHANGE_ME;Pooling=true;Maximum Pool Size=50;Timeout=10;Command Timeout=30"
+  }
+}

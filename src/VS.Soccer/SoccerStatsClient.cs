@@ -78,23 +78,38 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
     {
         // Derive a provider-neutral table from completed matches. This keeps the public
         // contract stable when a licensed provider replaces the initial MLS adapter.
-        var url = $"matches/seasons/{Uri.EscapeDataString(_options.SeasonId)}?competition_id={Uri.EscapeDataString(_options.CompetitionId)}&per_page=1000&sort=planned_kickoff_time:asc";
-        using var doc = await GetJsonAsync(url, cancellationToken);
-        if (!doc.RootElement.TryGetProperty("schedule", out var schedule) || schedule.ValueKind != JsonValueKind.Array) return [];
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var seasonStart = new DateOnly(today.Year, 1, 1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var through = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var baseUrl = $"matches/seasons/{Uri.EscapeDataString(_options.SeasonId)}?match_date[gte]={seasonStart}&match_date[lte]={through}&competition_id={Uri.EscapeDataString(_options.CompetitionId)}&per_page=120&sort=planned_kickoff_time:asc";
         var rows = new Dictionary<string, StandingAccumulator>(StringComparer.OrdinalIgnoreCase);
-        foreach (var node in schedule.EnumerateArray())
+        string? nextPageToken = null;
+        var seenTokens = new HashSet<string>(StringComparer.Ordinal);
+        do
         {
-            var match = ReadScheduleMatch(node);
-            if (!IsCompleted(match.Status)) continue;
-            Add(match.Away); Add(match.Home);
-            var away = rows[match.Away.TeamId]; var home = rows[match.Home.TeamId];
-            away.Played++; home.Played++; away.GoalsFor += match.Away.Score; away.GoalsAgainst += match.Home.Score;
-            home.GoalsFor += match.Home.Score; home.GoalsAgainst += match.Away.Score;
-            if (match.Away.Score > match.Home.Score) { away.Won++; home.Lost++; }
-            else if (match.Home.Score > match.Away.Score) { home.Won++; away.Lost++; }
-            else { away.Drawn++; home.Drawn++; }
-            void Add(SoccerTeam team) => rows.TryAdd(team.TeamId, new StandingAccumulator(team));
-        }
+            var url = nextPageToken is null ? baseUrl : $"{baseUrl}&next_page_token={Uri.EscapeDataString(nextPageToken)}";
+            using var doc = await GetJsonAsync(url, cancellationToken);
+            if (doc.RootElement.TryGetProperty("schedule", out var schedule) && schedule.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var node in schedule.EnumerateArray())
+                {
+                    var match = ReadScheduleMatch(node);
+                    if (!IsCompleted(match.Status)) continue;
+                    Add(match.Away); Add(match.Home);
+                    var away = rows[match.Away.TeamId]; var home = rows[match.Home.TeamId];
+                    away.Played++; home.Played++; away.GoalsFor += match.Away.Score; away.GoalsAgainst += match.Home.Score;
+                    home.GoalsFor += match.Home.Score; home.GoalsAgainst += match.Away.Score;
+                    if (match.Away.Score > match.Home.Score) { away.Won++; home.Lost++; }
+                    else if (match.Home.Score > match.Away.Score) { home.Won++; away.Lost++; }
+                    else { away.Drawn++; home.Drawn++; }
+                }
+            }
+
+            nextPageToken = S(doc.RootElement, "next_page_token");
+            if (string.IsNullOrWhiteSpace(nextPageToken) || !seenTokens.Add(nextPageToken)) nextPageToken = null;
+        } while (nextPageToken is not null);
+
+        void Add(SoccerTeam team) => rows.TryAdd(team.TeamId, new StandingAccumulator(team));
         return rows.Values.OrderByDescending(x => x.Points).ThenByDescending(x => x.GoalDifference).ThenByDescending(x => x.GoalsFor).ThenBy(x => x.Team.Name)
             .Select((x, i) => new SoccerStanding(i + 1, x.Team.TeamId, x.Team.Name, x.Team.Code, x.Played, x.Won, x.Drawn, x.Lost, x.GoalsFor, x.GoalsAgainst, x.GoalDifference, x.Points)).ToList();
     }

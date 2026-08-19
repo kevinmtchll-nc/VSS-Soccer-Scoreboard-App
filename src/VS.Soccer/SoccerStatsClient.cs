@@ -20,22 +20,33 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
         return schedule.EnumerateArray().Select(ReadScheduleMatch).ToList();
     }
 
-    public async Task<SoccerMatchCenter> GetMatchCenterAsync(string matchId, CancellationToken cancellationToken = default)
+    public async Task<SoccerMatchCenter> GetMatchCenterAsync(string matchId, DateOnly? scheduledDate = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(matchId))
             throw new ArgumentException("A match ID is required.", nameof(matchId));
 
         var id = Uri.EscapeDataString(matchId.Trim());
-        var matchTask = GetJsonTextAsync($"matches/{id}", cancellationToken);
-        var eventsTask = GetJsonTextAsync($"matches/{id}/key_events?per_page=1000", cancellationToken);
-        var statsTask = GetJsonTextAsync($"statistics/clubs/matches/{id}", cancellationToken);
+        var matchTask = GetOptionalJsonTextAsync($"matches/{id}", cancellationToken);
+        var eventsTask = GetOptionalJsonTextAsync($"matches/{id}/key_events?per_page=1000", cancellationToken);
+        var statsTask = GetOptionalJsonTextAsync($"statistics/clubs/matches/{id}", cancellationToken);
         await Task.WhenAll(matchTask, eventsTask, statsTask);
 
         using var matchDoc = JsonDocument.Parse(await matchTask);
         using var eventsDoc = JsonDocument.Parse(await eventsTask);
         using var statsDoc = JsonDocument.Parse(await statsTask);
 
-        var info = matchDoc.RootElement.GetProperty("match_information");
+        if (!matchDoc.RootElement.TryGetProperty("match_information", out var info))
+        {
+            var scheduled = await FindScheduledMatchAsync(matchId.Trim(), scheduledDate, cancellationToken)
+                ?? throw new KeyNotFoundException($"MLS match {matchId} was not found.");
+            return new SoccerMatchCenter(
+                scheduled,
+                new SoccerSide(scheduled.Away, "", []),
+                new SoccerSide(scheduled.Home, "", []),
+                ReadEvents(eventsDoc.RootElement),
+                ReadTeamStatistics(statsDoc.RootElement),
+                DateTimeOffset.UtcNow);
+        }
         var homeNode = matchDoc.RootElement.GetProperty("home");
         var awayNode = matchDoc.RootElement.GetProperty("away");
         var match = ReadDetailedMatch(info, homeNode, awayNode, matchDoc.RootElement);
@@ -47,6 +58,20 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
             ReadEvents(eventsDoc.RootElement),
             ReadTeamStatistics(statsDoc.RootElement),
             DateTimeOffset.UtcNow);
+    }
+
+    private async Task<SoccerMatch?> FindScheduledMatchAsync(string matchId, DateOnly? scheduledDate, CancellationToken cancellationToken)
+    {
+        var dates = scheduledDate.HasValue ? new[] { scheduledDate.Value } : Enumerable.Range(-2, 17).Select(offset => DateOnly.FromDateTime(DateTime.Today).AddDays(offset));
+        foreach (var date in dates)
+        {
+            IReadOnlyList<SoccerMatch> matches;
+            try { matches = await GetScheduleAsync(date, cancellationToken); }
+            catch (HttpRequestException) { continue; }
+            var match = matches.FirstOrDefault(value => value.MatchId.Equals(matchId, StringComparison.OrdinalIgnoreCase));
+            if (match is not null) return match;
+        }
+        return null;
     }
 
     public async Task<IReadOnlyList<SoccerStanding>> GetStandingsAsync(CancellationToken cancellationToken = default)
@@ -80,7 +105,7 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
         var centers = new List<SoccerMatchCenter>();
         foreach (var match in matches)
         {
-            try { centers.Add(await GetMatchCenterAsync(match.MatchId, cancellationToken)); }
+            try { centers.Add(await GetMatchCenterAsync(match.MatchId, date, cancellationToken)); }
             catch (HttpRequestException) { /* A pre-match feed may not expose details yet. */ }
         }
         var leaders = centers.SelectMany(center => center.Events.Select(e => (center, e)))
@@ -112,6 +137,16 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
         using var response = await httpClient.GetAsync(url, cancellationToken);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    private async Task<string> GetOptionalJsonTextAsync(string url, CancellationToken cancellationToken)
+    {
+        using var response = await httpClient.GetAsync(url, cancellationToken);
+        if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.NoContent)
+            return "{}";
+        response.EnsureSuccessStatusCode();
+        var value = await response.Content.ReadAsStringAsync(cancellationToken);
+        return string.IsNullOrWhiteSpace(value) ? "{}" : value;
     }
 
     private static SoccerMatch ReadScheduleMatch(JsonElement node)

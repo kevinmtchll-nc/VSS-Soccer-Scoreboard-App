@@ -27,7 +27,7 @@ async function load() {
       <div class="game-card-top"><strong>${esc(statusText(game.status))}${game.minute ? ` · ${esc(game.minute)}'` : ''}</strong><span class="muted">${esc(game.stadium)}</span></div>
       ${teamRow(game.away)}${teamRow(game.home)}
       <div class="game-context">Matchweek ${game.matchDay} · ${new Date(game.plannedKickoff).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>
-      <a class="game-center-link" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(game.matchId)}">Open MatchCenter</a>
+      <a class="game-center-link" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(game.matchId)}&date=${encodeURIComponent(dateInput.value)}">Open MatchCenter</a>
     </article>`).join('') : '<article class="panel">No MLS matches are scheduled for this date.</article>';
   } catch (error) {
     matches.innerHTML = `<article class="panel error">Unable to load MLS matches: ${esc(error.message)}</article>`;

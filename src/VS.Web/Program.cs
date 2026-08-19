@@ -1288,23 +1288,50 @@ app.MapGet("/api/soccer/matches", async (string? date, ISoccerStatsClient soccer
     return Results.Ok(await soccer.GetScheduleAsync(targetDate, ct));
 });
 
-app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
-    Results.Ok(await soccer.GetMatchCenterAsync(matchId, ct)));
+app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, string? date, ISoccerStatsClient soccer, CancellationToken ct) =>
+    Results.Ok(await soccer.GetMatchCenterAsync(matchId, DateOnly.TryParse(date, out var parsed) ? parsed : null, ct)));
 
 app.MapGet("/api/soccer/team-logo", async (string name, string? code, SportradarLogoClient logos, HttpContext context, CancellationToken ct) =>
 {
     try
     {
         var logo = await logos.GetTeamLogoAsync(name, code, ct);
-        if (logo is null) return Results.NotFound();
+        if (logo is null) return FallbackLogo(name, code);
         context.Response.Headers.CacheControl = "public,max-age=43200";
         context.Response.Headers["X-Image-Copyright"] = logo.Copyright;
         return Results.File(logo.Bytes, logo.ContentType);
     }
-    catch (HttpRequestException) { return Results.NotFound(); }
+    catch (HttpRequestException) { return FallbackLogo(name, code); }
 });
 
+IResult FallbackLogo(string name, string? code)
+{
+    var letters = string.IsNullOrWhiteSpace(code)
+        ? string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(3).Select(word => char.ToUpperInvariant(word[0])))
+        : code.Trim().ToUpperInvariant();
+    letters = new string(letters.Where(char.IsLetterOrDigit).Take(4).ToArray());
+    var safe = System.Net.WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(letters) ? "MLS" : letters);
+    var svg = $"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path fill="#13243a" stroke="#62b5ff" stroke-width="5" d="M12 8h96v68c0 19-20 31-48 40C32 107 12 95 12 76Z"/><text x="60" y="69" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-size="30" font-weight="700">{safe}</text></svg>""";
+    return Results.Text(svg, "image/svg+xml", System.Text.Encoding.UTF8);
+}
+
 app.MapGet("/api/soccer/team-logo/status", (SportradarLogoClient logos) => Results.Ok(new { provider = "Sportradar Images API v3", configured = logos.IsConfigured }));
+
+app.MapPost("/api/soccer/team-logo/settings", async (HttpContext context) =>
+{
+    if (!IsLocalRequest(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+    using var body = await JsonDocument.ParseAsync(context.Request.Body);
+    var root = body.RootElement;
+    var apiKey = root.TryGetProperty("apiKey", out var keyNode) ? keyNode.GetString()?.Trim() ?? "" : "";
+    var accessLevel = root.TryGetProperty("accessLevel", out var levelNode) && levelNode.GetString()?.Equals("t", StringComparison.OrdinalIgnoreCase) == true ? "t" : "p";
+    var manifestYear = root.TryGetProperty("manifestYear", out var yearNode) && yearNode.TryGetInt32(out var year) ? Math.Clamp(year, 2013, DateTime.UtcNow.Year + 1) : DateTime.UtcNow.Year;
+    JsonObject settings;
+    try { settings = File.Exists(vsConfigPath) ? JsonNode.Parse(await File.ReadAllTextAsync(vsConfigPath))?.AsObject() ?? new JsonObject() : new JsonObject(); }
+    catch { settings = new JsonObject(); }
+    settings["SportradarImages"] = new JsonObject { ["ApiKey"] = apiKey, ["AccessLevel"] = accessLevel, ["Provider"] = "ap", ["League"] = "mls", ["ManifestYear"] = manifestYear };
+    await File.WriteAllTextAsync(vsConfigPath, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+    return Results.Ok(new { message = "Sportradar Images API settings saved.", configured = !string.IsNullOrWhiteSpace(apiKey) });
+});
 
 app.MapGet("/api/soccer/standings", async (ISoccerStatsClient soccer, IMemoryCache cache, CancellationToken ct) =>
 {
@@ -1337,7 +1364,7 @@ app.MapGet("/api/integrations/soccer/feed", async (string? date, string? matchId
 {
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
-    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, ct);
+    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
     return Results.Ok(new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.0", generatedAt = DateTimeOffset.UtcNow, date = target, matches, selectedMatch = selected });
 });
 
@@ -1345,7 +1372,7 @@ app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? mat
 {
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
-    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, ct);
+    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
     static XElement Team(string name, SoccerTeam team) => new(name, new XAttribute("id", team.TeamId), new XElement("name", team.Name), new XElement("code", team.Code), new XElement("score", team.Score));
     var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.0"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", target.ToString("yyyy-MM-dd")),
         new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), new XElement("competition", m.Competition), Team("away", m.Away), Team("home", m.Home)))),

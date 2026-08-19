@@ -9,7 +9,7 @@ public sealed record VideoOutputSettings(
     int Port = 5004,
     string Scene = "gamecenter-standard",
     string? TemplateId = null,
-    long? GamePk = null,
+    string? MatchId = null,
     int Width = 1920,
     int Height = 1080,
     int FrameRate = 30,

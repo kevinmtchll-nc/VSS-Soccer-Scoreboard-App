@@ -11,7 +11,8 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 const statusText = status => ({scheduled:'Scheduled',warmup:'Warmup',firstHalf:'First Half',halfTime:'Halftime',secondHalf:'Second Half',finalWhistle:'Final',postponed:'Postponed'}[status] || status || 'Scheduled');
 
 function teamRow(team) {
-  return `<div class="team-row"><div class="team-name-wrap"><strong>${esc(team.name)}</strong><span class="muted">${esc(team.code)}</span></div><strong class="team-score">${team.score ?? 0}</strong></div>`;
+  const logo = `/api/soccer/team-logo?name=${encodeURIComponent(team.name)}&code=${encodeURIComponent(team.code || '')}`;
+  return `<div class="team-row"><img class="team-logo" src="${logo}" alt="" onerror="this.hidden=true"><div class="team-name-wrap"><strong>${esc(team.name)}</strong><span class="muted">${esc(team.code)}</span></div><strong class="team-score">${team.score ?? 0}</strong></div>`;
 }
 
 async function load() {

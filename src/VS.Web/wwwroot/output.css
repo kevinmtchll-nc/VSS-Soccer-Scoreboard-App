@@ -116,3 +116,4 @@ html,body { width:100%; height:100%; margin:0; overflow:hidden; background-color
 .workspace-editor-toolbar input { min-width:220px; }
 .workspace-editor-toolbar span { color:var(--muted); font-size:12px; }
 @media (max-width:900px) { .output-live-grid,.output-box-teams { grid-template-columns:1fr; }.output-scoring-item { grid-template-columns:1fr; }.output-game-header { gap:.5rem; }.output-feature-team strong { display:none; } }
+.soccer-output-scene{height:100%}.soccer-output-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,1.25fr) minmax(0,1fr);gap:.7rem;min-height:0;flex:1}.soccer-output-grid>.output-panel{overflow:hidden}.soccer-output-player,.soccer-output-event,.soccer-output-stat-row{padding:.42rem .25rem;border-bottom:1px solid var(--line);font-size:clamp(11px,.8vw,16px)}.soccer-output-timeline{overflow:auto!important}.soccer-output-stats{flex:0 0 auto}.soccer-output-stats h2{margin:.2rem 0}.output-team-logo{object-fit:contain}

@@ -49,7 +49,7 @@ internal sealed class EmbeddedRenderer : IAsyncDisposable
                 MultiThreadedMessageLoop = true,
                 LogSeverity = LogSeverity.Disable,
                 CachePath = Path.Combine(
-                    Path.GetTempPath(), "VITECScoreboard.VideoOutput",
+                    Path.GetTempPath(), "VITECSoccerScoreboard.VideoOutput",
                     $"Cef-{Environment.ProcessId}-{Guid.NewGuid():N}")
             };
             settings.CefCommandLineArgs["disable-extensions"] = "1";

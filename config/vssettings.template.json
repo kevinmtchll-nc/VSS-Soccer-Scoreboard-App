@@ -4,5 +4,12 @@
   },
   "ConnectionStrings": {
     "VSPostgres": "Host=localhost;Port=5432;Database=vitec_soccer_scoreboard;Username=vsapp;Password=CHANGE_ME;Pooling=true;Maximum Pool Size=50;Timeout=10;Command Timeout=30"
+  },
+  "SportradarImages": {
+    "ApiKey": "",
+    "AccessLevel": "p",
+    "Provider": "ap",
+    "League": "mls",
+    "ManifestYear": 2026
   }
 }

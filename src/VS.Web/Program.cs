@@ -198,9 +198,16 @@ builder.Services.AddHttpClient<IMlbStatsClient, MlbStatsClient>(client =>
 });
 
 builder.Services.Configure<SoccerStatsOptions>(builder.Configuration.GetSection(SoccerStatsOptions.SectionName));
+builder.Services.Configure<SportradarImagesOptions>(builder.Configuration.GetSection(SportradarImagesOptions.SectionName));
 builder.Services.AddHttpClient<ISoccerStatsClient, SoccerStatsClient>(client =>
 {
     client.BaseAddress = new Uri("https://stats-api.mlssoccer.com/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"VITEC-Soccer-Scoreboard/{applicationVersion}");
+});
+builder.Services.AddHttpClient<SportradarLogoClient>(client =>
+{
+    client.BaseAddress = new Uri("https://api.sportradar.com/");
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.UserAgent.ParseAdd($"VITEC-Soccer-Scoreboard/{applicationVersion}");
 });
@@ -221,6 +228,23 @@ if (!string.IsNullOrWhiteSpace(pgConnection))
 
 var app = builder.Build();
 
+// The baseball implementation remains in the solution for preservation and
+// comparison, but the soccer host must never expose baseball data or routes.
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path;
+    if (path.StartsWithSegments("/api/mlb") ||
+        path.StartsWithSegments("/api/history") ||
+        path.StartsWithSegments("/api/analytics/pitches") ||
+        path.StartsWithSegments("/api/integrations/eztv"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsJsonAsync(new { message = "This route is not available in VITEC Soccer Scoreboard." });
+        return;
+    }
+    await next();
+});
+
 app.Use(async (context, next) =>
 {
     try
@@ -239,7 +263,7 @@ app.Use(async (context, next) =>
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsJsonAsync(new
             {
-                error = "VITEC Scoreboard request failed.",
+                error = "VITEC Soccer Scoreboard request failed.",
                 path = context.Request.Path.Value,
                 message = ex.Message
             });
@@ -266,7 +290,7 @@ app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvid
 
 app.MapGet("/api/health", () => Results.Ok(new
 {
-    app = "VITEC Scoreboard",
+    app = "VITEC Soccer Scoreboard",
     abbreviation = "VS",
     version = applicationVersion,
     status = "ok",
@@ -1247,8 +1271,8 @@ app.MapGet("/api/setup/status", async (
     return Results.Ok(new
     {
         version = applicationVersion,
-        service = "VITEC Scoreboard",
-        listenUrl = builder.Configuration["VS:ListenUrl"] ?? "http://0.0.0.0:5000",
+        service = "VITEC Soccer Scoreboard",
+        listenUrl = builder.Configuration["VS:ListenUrl"] ?? "http://0.0.0.0:5100",
         postgresConfigured = !string.IsNullOrWhiteSpace(GetCurrentPostgresConnectionString()),
         database = dbStatus,
         settingsFile = vsConfigPath,
@@ -1266,6 +1290,21 @@ app.MapGet("/api/soccer/matches", async (string? date, ISoccerStatsClient soccer
 
 app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
     Results.Ok(await soccer.GetMatchCenterAsync(matchId, ct)));
+
+app.MapGet("/api/soccer/team-logo", async (string name, string? code, SportradarLogoClient logos, HttpContext context, CancellationToken ct) =>
+{
+    try
+    {
+        var logo = await logos.GetTeamLogoAsync(name, code, ct);
+        if (logo is null) return Results.NotFound();
+        context.Response.Headers.CacheControl = "public,max-age=43200";
+        context.Response.Headers["X-Image-Copyright"] = logo.Copyright;
+        return Results.File(logo.Bytes, logo.ContentType);
+    }
+    catch (HttpRequestException) { return Results.NotFound(); }
+});
+
+app.MapGet("/api/soccer/team-logo/status", (SportradarLogoClient logos) => Results.Ok(new { provider = "Sportradar Images API v3", configured = logos.IsConfigured }));
 
 app.MapGet("/api/soccer/standings", async (ISoccerStatsClient soccer, IMemoryCache cache, CancellationToken ct) =>
 {

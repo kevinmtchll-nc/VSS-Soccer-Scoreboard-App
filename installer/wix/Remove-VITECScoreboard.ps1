@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
-$serviceName = 'VITECScoreboard'
-$firewallRule = 'VITEC Scoreboard TCP 5000'
+$serviceName = 'VITECSoccerScoreboard'
+$firewallRule = 'VITEC Soccer Scoreboard TCP 5100'
 
 & sc.exe query $serviceName *> $null
 if ($LASTEXITCODE -eq 0) {

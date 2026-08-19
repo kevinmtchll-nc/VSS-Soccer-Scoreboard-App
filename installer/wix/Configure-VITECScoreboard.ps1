@@ -5,11 +5,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$serviceName = 'VITECScoreboard'
-$displayName = 'VITEC Scoreboard'
-$firewallRule = 'VITEC Scoreboard TCP 5000'
+$serviceName = 'VITECSoccerScoreboard'
+$displayName = 'VITEC Soccer Scoreboard'
+$firewallRule = 'VITEC Soccer Scoreboard TCP 5100'
 $InstallDirectory = Split-Path -Parent $PSScriptRoot
-$dataDirectory = Join-Path $env:ProgramData 'VITEC Scoreboard'
+$dataDirectory = Join-Path $env:ProgramData 'VITEC Soccer Scoreboard'
 $settingsPath = Join-Path $dataDirectory 'vssettings.json'
 $applicationExe = Join-Path $InstallDirectory 'VITEC.Scoreboard.exe'
 
@@ -64,14 +64,14 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Windows could not create or update the VITEC Scoreboard service.'
 }
 
-& sc.exe description $serviceName 'VITEC Scoreboard MLB live scoring and GameCenter service.' | Out-Null
+& sc.exe description $serviceName 'VITEC Soccer Scoreboard MLS live scoring and MatchCenter service.' | Out-Null
 & sc.exe failure $serviceName 'reset= 86400' 'actions= restart/5000/restart/10000/restart/30000' | Out-Null
 & sc.exe failureflag $serviceName 1 | Out-Null
 
 & netsh.exe advfirewall firewall delete rule "name=$firewallRule" *> $null
-& netsh.exe advfirewall firewall add rule "name=$firewallRule" dir=in action=allow protocol=TCP localport=5000 | Out-Null
+& netsh.exe advfirewall firewall add rule "name=$firewallRule" dir=in action=allow protocol=TCP localport=5100 | Out-Null
 if ($LASTEXITCODE -ne 0) {
-    throw 'Windows could not create the inbound firewall rule for TCP port 5000.'
+    throw 'Windows could not create the inbound firewall rule for TCP port 5100.'
 }
 
 for ($attempt = 1; $attempt -le 3; $attempt++) {

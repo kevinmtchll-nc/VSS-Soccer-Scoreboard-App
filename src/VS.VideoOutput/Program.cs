@@ -4,8 +4,8 @@ using System.Text.Json;
 
 var serverOverride = Environment.GetEnvironmentVariable("VITEC_SCOREBOARD_SERVER");
 var mutexName = string.IsNullOrWhiteSpace(serverOverride)
-    ? @"Local\VITECScoreboard.VideoOutput"
-    : @"Local\VITECScoreboard.VideoOutput.Test";
+    ? @"Local\VITECSoccerScoreboard.VideoOutput"
+    : @"Local\VITECSoccerScoreboard.VideoOutput.Test";
 using var instanceMutex = new Mutex(true, mutexName, out var ownsInstance);
 if (!ownsInstance) return;
 
@@ -82,7 +82,7 @@ async Task<(VS.VideoOutput.EmbeddedRenderer renderer, Process ffmpegProcess, str
 {
     if (!File.Exists(settings.FfmpegPath)) throw new FileNotFoundException("FFmpeg was not found at the configured path.", settings.FfmpegPath);
     var sceneUrl = $"{server}/output.html?scene={Uri.EscapeDataString(settings.Scene)}" +
-                   (settings.Scene != "scoreboard" && settings.GamePk is > 0 ? $"&gamePk={settings.GamePk}" : "") +
+                   (settings.Scene != "scoreboard" && !string.IsNullOrWhiteSpace(settings.MatchId) ? $"&matchId={Uri.EscapeDataString(settings.MatchId)}" : "") +
                    (settings.Scene == "game-workspace" && !string.IsNullOrWhiteSpace(settings.TemplateId) ? $"&template={Uri.EscapeDataString(settings.TemplateId)}" : "");
     var renderWidth = settings.Width;
     var renderHeight = settings.Height;
@@ -116,14 +116,14 @@ string ResolveServer()
         return overrideUri.GetLeftPart(UriPartial.Authority);
     try
     {
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "VITEC Scoreboard", "vssettings.json");
+        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "VITEC Soccer Scoreboard", "vssettings.json");
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         var configured = document.RootElement.GetProperty("VS").GetProperty("ListenUrl").GetString();
         if (Uri.TryCreate(configured?.Replace("0.0.0.0", "localhost"), UriKind.Absolute, out var uri))
             return uri.GetLeftPart(UriPartial.Authority);
     }
     catch { }
-    return "http://localhost:5000";
+    return "http://localhost:5100";
 }
 
 IEnumerable<string> BuildArguments(VideoSettings s)
@@ -201,4 +201,4 @@ void Stop(Process? process)
 
 sealed record WorkerCommand(VideoSettings Settings, bool DesiredRunning, long Revision);
 sealed record WorkerStatus(bool Running, string Message, int? FfmpegProcessId, string OutputUrl);
-sealed record VideoSettings(string FfmpegPath, string Protocol, string Destination, int Port, string Scene, string? TemplateId, long? GamePk, int Width, int Height, int FrameRate, int VideoBitrateKbps, int SrtLatencyMs);
+sealed record VideoSettings(string FfmpegPath, string Protocol, string Destination, int Port, string Scene, string? TemplateId, string? MatchId, int Width, int Height, int FrameRate, int VideoBitrateKbps, int SrtLatencyMs);

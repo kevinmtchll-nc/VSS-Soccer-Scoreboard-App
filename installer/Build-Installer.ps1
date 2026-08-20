@@ -10,7 +10,7 @@ $publishDirectory = Join-Path $root 'artifacts\publish\win-x64'
 $outputDirectory = Join-Path $root 'artifacts\installer'
 $wix = Join-Path $root '.tools\wix.exe'
 $productSource = Join-Path $PSScriptRoot 'wix\Product.wxs'
-$outputMsi = Join-Path $outputDirectory 'VITEC-Soccer-Scoreboard-Setup-v0.2.1.msi'
+$outputMsi = Join-Path $outputDirectory 'VITEC-Soccer-Scoreboard-Setup-v0.2.2.msi'
 
 if (-not (Test-Path -LiteralPath $wix)) {
     throw 'WiX is missing. Run: dotnet tool install wix --tool-path .tools --version 5.0.2'
@@ -30,7 +30,7 @@ New-Item -ItemType Directory -Path $publishDirectory, $outputDirectory -Force | 
 dotnet publish (Join-Path $root 'src\VS.Web\VS.Web.csproj') `
     -c $Configuration `
     -r win-x64 `
-    --self-contained true `
+    --self-contained false `
     -p:UseAppHost=true `
     -o $publishDirectory
 if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
@@ -38,7 +38,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Application publish failed.' }
 dotnet publish (Join-Path $root 'src\VS.VideoOutput\VS.VideoOutput.csproj') `
     -c $Configuration `
     -r win-x64 `
-    --self-contained true `
+    --self-contained false `
     -p:UseAppHost=true `
     -o $publishDirectory
 if ($LASTEXITCODE -ne 0) { throw 'Video output helper publish failed.' }

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>VITEC Soccer MatchCenter</title>
-  <link rel="stylesheet" href="/site.css?v=0.2.7">
+  <link rel="stylesheet" href="/site.css?v=0.2.9">
 </head>
 <body>
   <header class="app-header">
@@ -18,7 +18,7 @@
     <p class="layout-hint">Drag a panel by its heading to arrange this MatchCenter. The layout is saved on this computer.</p>
     <section id="matchcenter-layout" class="gc-grid">
       <article class="panel draggable-panel" data-panel-id="away" draggable="true"><h2>Away Lineup <span class="drag-indicator" aria-hidden="true">⋮⋮</span></h2><div id="away"></div></article>
-      <article class="panel draggable-panel" data-panel-id="timeline" draggable="true"><h2>Match Timeline <span class="drag-indicator" aria-hidden="true">⋮⋮</span></h2><div id="timeline" class="pitch-list"></div></article>
+      <article class="panel draggable-panel" data-panel-id="timeline" draggable="true"><h2>Complete Match Timeline <span class="drag-indicator" aria-hidden="true">⋮⋮</span></h2><div id="timeline" class="pitch-list timeline-scroll"></div></article>
       <article class="panel draggable-panel" data-panel-id="home" draggable="true"><h2>Home Lineup <span class="drag-indicator" aria-hidden="true">⋮⋮</span></h2><div id="home"></div></article>
     </section>
     <section class="panel"><h2>Team Statistics</h2><div id="stats"></div></section>
@@ -27,6 +27,6 @@
       <div id="shot-map"></div>
     </section>
   </main>
-  <script src="/soccer-matchcenter.js?v=0.2.7"></script>
+  <script src="/soccer-matchcenter.js?v=0.2.9"></script>
 </body>
 </html>

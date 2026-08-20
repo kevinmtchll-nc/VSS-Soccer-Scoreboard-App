@@ -7,10 +7,11 @@ dateInput.value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStar
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 
 function render(matches) {
-  matchesNode.innerHTML = matches.map(snapshot => `<article class="match-card history-card">
-    <div class="match-meta"><strong>${esc(snapshot.status)}</strong><span>${new Date(snapshot.plannedKickoff).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span></div>
-    <div class="history-score"><span>${esc(snapshot.awayTeam)}</span><strong>${snapshot.awayScore} – ${snapshot.homeScore}</strong><span>${esc(snapshot.homeTeam)}</span></div>
-    <div class="match-footer"><span>${esc(snapshot.competition)}</span><a href="/soccer-matchcenter.html?matchId=${encodeURIComponent(snapshot.matchId)}&history=1">Open Stored MatchCenter</a></div>
+  matchesNode.innerHTML = matches.map(snapshot => `<article class="panel history-card">
+    <div class="history-card-top"><span class="history-status">${esc(String(snapshot.status).replace(/([a-z])([A-Z])/g,'$1 $2'))}</span><time>${new Date(snapshot.plannedKickoff).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time></div>
+    <div class="history-team-row"><img src="/api/soccer/team-logo?name=${encodeURIComponent(snapshot.awayTeam)}" alt="" onerror="this.hidden=true"><strong>${esc(snapshot.awayTeam)}</strong><b>${snapshot.awayScore}</b></div>
+    <div class="history-team-row"><img src="/api/soccer/team-logo?name=${encodeURIComponent(snapshot.homeTeam)}" alt="" onerror="this.hidden=true"><strong>${esc(snapshot.homeTeam)}</strong><b>${snapshot.homeScore}</b></div>
+    <div class="history-card-footer"><span>${esc(snapshot.competition)}</span><a class="button-link" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(snapshot.matchId)}&history=1">Open MatchCenter</a></div>
   </article>`).join('');
 }
 

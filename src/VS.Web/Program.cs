@@ -192,6 +192,9 @@ var adMedia = new AdMediaStore(vsConfigDirectory);
 builder.Services.AddSingleton(adMedia);
 var teamLogoStore = new SoccerTeamLogoStore(vsConfigDirectory);
 builder.Services.AddSingleton(teamLogoStore);
+builder.Services.AddSingleton(new SoccerGameRecordingStore(vsConfigDirectory));
+builder.Services.AddSingleton<SoccerGameRecorder>();
+builder.Services.AddSingleton<SoccerReplayCoordinator>();
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = 250L * 1024 * 1024);
 
 builder.Services.AddHttpClient<IMlbStatsClient, MlbStatsClient>(client =>
@@ -1299,8 +1302,11 @@ app.MapGet("/api/soccer/matches", async (string? date, ISoccerStatsClient soccer
     return Results.Ok(await soccer.GetScheduleAsync(targetDate, ct));
 });
 
-app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, string? date, ISoccerStatsClient soccer, CancellationToken ct) =>
-    Results.Ok(await soccer.GetMatchCenterAsync(matchId, DateOnly.TryParse(date, out var parsed) ? parsed : null, ct)));
+app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, string? date, ISoccerStatsClient soccer, SoccerReplayCoordinator replay, CancellationToken ct) =>
+{
+    if(matchId.StartsWith("replay:",StringComparison.OrdinalIgnoreCase)){var savedId=matchId[7..];var center=await replay.CurrentAsync(savedId,ct);return center is null?Results.NotFound(new{message="Saved game was not found."}):Results.Ok(center);}
+    return Results.Ok(await soccer.GetMatchCenterAsync(matchId, DateOnly.TryParse(date, out var parsed) ? parsed : null, ct));
+});
 
 app.MapGet("/api/soccer/team-logo", async (string name, string? code, SoccerTeamLogoStore uploads, MlsTeamLogoClient mlsLogos, SportradarLogoClient sportradar, HttpContext context, CancellationToken ct) =>
 {
@@ -1313,7 +1319,7 @@ app.MapGet("/api/soccer/team-logo", async (string name, string? code, SoccerTeam
             context.Response.Headers["X-Team-Logo-Source"] = uploaded.Source;
             return Results.File(uploaded.Bytes, uploaded.ContentType);
         }
-        var mlsLogo = await mlsLogos.GetAsync(code, ct);
+        var mlsLogo = await mlsLogos.GetAsync(name, code, ct);
         if (mlsLogo is not null)
         {
             context.Response.Headers.CacheControl = "public,max-age=43200";
@@ -1579,6 +1585,24 @@ app.MapPost("/api/soccer/workspaces", async (HttpRequest request, SoccerWorkspac
 });
 app.MapDelete("/api/soccer/workspaces/{id}", (string id, SoccerWorkspaceStore store) => id.Equals("default", StringComparison.OrdinalIgnoreCase) ? Results.BadRequest(new { message = "The default workspace cannot be deleted." }) : store.Delete(id) ? Results.Ok() : Results.NotFound());
 
+app.MapGet("/api/soccer/recordings", async (SoccerGameRecordingStore recordings,SoccerGameRecorder recorder,CancellationToken ct)=>Results.Ok(await recordings.ListAsync(recorder.ActiveIds,ct)));
+app.MapPost("/api/soccer/recordings/download",async(HttpContext context,string matchId,string? date,ISoccerStatsClient soccer,SoccerGameRecordingStore recordings,CancellationToken ct)=>
+{
+    if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);var target=DateOnly.TryParse(date,out var parsed)?parsed:DateOnly.FromDateTime(DateTime.Today);var center=await soccer.GetMatchCenterAsync(matchId,target,ct);await recordings.SaveAsync(center,true,ct);return Results.Ok(new{message=$"Complete game package saved for {center.Match.Away.Name} at {center.Match.Home.Name}.",matchId});
+});
+app.MapPost("/api/soccer/recordings/start",(HttpContext context,string matchId,string? date,SoccerGameRecorder recorder)=>
+{
+    if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);var target=DateOnly.TryParse(date,out var parsed)?parsed:DateOnly.FromDateTime(DateTime.Today);return Results.Ok(new{message=recorder.Start(matchId,target)?"Live game recording started. The Windows service will continue recording every 30 seconds.":"That game is already being recorded.",matchId});
+});
+app.MapPost("/api/soccer/recordings/stop",(HttpContext context,string matchId,SoccerGameRecorder recorder)=>
+{
+    if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);return Results.Ok(new{message=recorder.Stop(matchId)?"Game recording stopped.":"That game was not actively recording.",matchId});
+});
+app.MapGet("/api/soccer/replay/status",(SoccerReplayCoordinator replay)=>Results.Ok(replay.Status()));
+app.MapPost("/api/soccer/replay/start",(HttpContext context,string matchId,double? speed,SoccerReplayCoordinator replay)=>{if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);replay.Start(matchId,speed??1);return Results.Ok(new{message="Saved-game replay started.",matchId,speed=speed??1});});
+app.MapPost("/api/soccer/replay/pause",(HttpContext context,SoccerReplayCoordinator replay)=>{if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);replay.Pause();return Results.Ok(new{message="Saved-game replay paused."});});
+app.MapPost("/api/soccer/replay/reset",(HttpContext context,SoccerReplayCoordinator replay)=>{if(!IsLocalRequest(context))return Results.StatusCode(StatusCodes.Status403Forbidden);replay.Reset();return Results.Ok(new{message="Saved-game replay reset to kickoff."});});
+
 var conditionSettingsPath = Path.Combine(vsConfigDirectory, "match-conditions.json");
 string[] conditionFieldNames = ["temperature", "humidity", "airPressure", "precipitation", "roof", "floodlights", "pitchCondition", "attendance", "stadiumCapacity", "capacityPercent", "soldOut", "stadiumAddress"];
 Dictionary<string, bool> LoadConditionSelection()
@@ -1623,6 +1647,10 @@ async Task<List<object>> LoadConditionFeedAsync(IReadOnlyList<SoccerMatch> match
     }
     return output;
 }
+async Task<SoccerMatchCenter?> ResolveOutputMatchAsync(string? matchId,DateOnly target,ISoccerStatsClient soccer,SoccerReplayCoordinator replay,CancellationToken ct)
+{
+    if(string.IsNullOrWhiteSpace(matchId))return null;if(matchId.StartsWith("replay:",StringComparison.OrdinalIgnoreCase))return await replay.CurrentAsync(matchId[7..],ct);return await soccer.GetMatchCenterAsync(matchId,target,ct);
+}
 app.MapGet("/api/soccer/match-condition-settings", () => Results.Ok(LoadConditionSelection()));
 app.MapPost("/api/soccer/match-condition-settings", async (HttpRequest request, CancellationToken ct) =>
 {
@@ -1636,22 +1664,26 @@ app.MapPost("/api/soccer/match-condition-settings", async (HttpRequest request, 
     }
     catch (Exception ex) { return Results.BadRequest(new { message = ex.Message }); }
 });
+var matchCenterDisplayPath=Path.Combine(vsConfigDirectory,"matchcenter-display.json");
+int LoadTimelineRows(){try{if(File.Exists(matchCenterDisplayPath)){var node=JsonNode.Parse(File.ReadAllText(matchCenterDisplayPath))?["visibleTimelineEvents"];if(node is JsonValue value&&value.TryGetValue<int>(out var rows))return Math.Clamp(rows,5,100);}}catch{}return 20;}
+app.MapGet("/api/soccer/matchcenter-display-settings",()=>Results.Ok(new{visibleTimelineEvents=LoadTimelineRows()}));
+app.MapPost("/api/soccer/matchcenter-display-settings",async(HttpRequest request,CancellationToken ct)=>{try{using var document=await JsonDocument.ParseAsync(request.Body,cancellationToken:ct);var rows=document.RootElement.TryGetProperty("visibleTimelineEvents",out var node)&&node.TryGetInt32(out var parsed)?Math.Clamp(parsed,5,100):20;await File.WriteAllTextAsync(matchCenterDisplayPath,new JsonObject{{"visibleTimelineEvents",rows}}.ToJsonString(new JsonSerializerOptions{WriteIndented=true}),ct);return Results.Ok(new{message=$"Match Timeline will show approximately {rows} event rows before scrolling.",visibleTimelineEvents=rows});}catch(Exception ex){return Results.BadRequest(new{message=ex.Message});}});
 
-app.MapGet("/api/integrations/soccer/feed", async (string? date, string? matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
+app.MapGet("/api/integrations/soccer/feed", async (string? date, string? matchId, ISoccerStatsClient soccer, SoccerReplayCoordinator replay, CancellationToken ct) =>
 {
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
-    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
+    var selected = await ResolveOutputMatchAsync(matchId,target,soccer,replay,ct);
     var enabled = LoadConditionSelection();
     var matchConditions = await LoadConditionFeedAsync(matches, target, soccer, enabled, ct);
     return Results.Ok(new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.1", generatedAt = DateTimeOffset.UtcNow, date = target, matches, matchConditions, selectedMatch = selected is null ? null : new { match = selected.Match, away = selected.Away, home = selected.Home, events = selected.Events, teamStatistics = selected.TeamStatistics, conditions = ProjectConditions(selected.Conditions, enabled), selected.UpdatedAt } });
 });
 
-app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
+app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? matchId, ISoccerStatsClient soccer, SoccerReplayCoordinator replay, CancellationToken ct) =>
 {
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
-    var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
+    var selected = await ResolveOutputMatchAsync(matchId,target,soccer,replay,ct);
     var enabled = LoadConditionSelection();
     var matchConditions = await LoadConditionFeedAsync(matches, target, soccer, enabled, ct);
     static XElement Team(string name, SoccerTeam team) => new(name, new XAttribute("id", team.TeamId), new XElement("name", team.Name), new XElement("code", team.Code), new XElement("score", team.Score));
@@ -1709,7 +1741,7 @@ app.MapPost("/api/integrations/eztv-dsm/test", async (IHttpClientFactory clients
     catch (Exception ex) { return Results.Json(new { message = $"DSM connection failed: {ex.Message}" }, statusCode: StatusCodes.Status502BadGateway); }
 });
 
-app.MapPost("/api/integrations/eztv-dsm/push", async (string? date, string? matchId, ISoccerStatsClient soccer, IHttpClientFactory clients, CancellationToken ct) =>
+app.MapPost("/api/integrations/eztv-dsm/push", async (string? date, string? matchId, ISoccerStatsClient soccer, SoccerReplayCoordinator replay, IHttpClientFactory clients, CancellationToken ct) =>
 {
     try
     {
@@ -1718,7 +1750,7 @@ app.MapPost("/api/integrations/eztv-dsm/push", async (string? date, string? matc
         if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var target)) return Results.BadRequest(new { message = "Save a DSM endpoint first." });
         var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
         var matches = await soccer.GetScheduleAsync(targetDate, ct);
-        var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, targetDate, ct);
+        var selected = await ResolveOutputMatchAsync(matchId,targetDate,soccer,replay,ct);
         var enabled = LoadConditionSelection();
         var matchConditions = await LoadConditionFeedAsync(matches, targetDate, soccer, enabled, ct);
         var format = settings["format"]?.GetValue<string>()?.Equals("xml", StringComparison.OrdinalIgnoreCase) == true ? "xml" : "json";

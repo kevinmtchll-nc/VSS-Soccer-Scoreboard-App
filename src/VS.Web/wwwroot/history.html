@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>VITEC Soccer Scoreboard · MLS History</title>
-  <link rel="stylesheet" href="/site.css?v=0.2.7">
+  <link rel="stylesheet" href="/site.css?v=0.2.9">
 </head>
 <body>
   <header class="app-header">
@@ -13,11 +13,11 @@
   </header>
   <main class="page-shell">
     <section class="panel">
-      <div class="history-controls"><label><span>Match date</span><input id="historyDate" type="date"></label><button id="loadHistory" type="button">Load History</button><button id="captureDate" type="button">Capture This Date</button><button id="exportHistoryJson" type="button">Export JSON</button><button id="exportHistoryXml" type="button">Export XML</button><label class="history-import-label"><span>Import historical data</span><input id="historyImportFile" type="file" accept="application/json,.json"></label><button id="importHistory" type="button">Import JSON</button></div>
+      <div class="history-controls"><div class="history-control-group"><label><span>Match date</span><input id="historyDate" type="date"></label><button id="loadHistory" type="button">Load</button><button id="captureDate" type="button">Capture Date</button></div><div class="history-control-group"><span class="history-group-label">Export</span><button id="exportHistoryJson" type="button">JSON</button><button id="exportHistoryXml" type="button">XML</button></div><div class="history-control-group history-import-group"><label class="history-import-label"><span>Import historical data</span><input id="historyImportFile" type="file" accept="application/json,.json"></label><button id="importHistory" type="button">Import JSON</button></div></div>
       <div id="historyStatus" class="setup-banner" aria-live="polite">Loading MLS history…</div>
     </section>
     <section id="historyMatches" class="scoreboard-grid" aria-live="polite"></section>
   </main>
-  <script src="/history.js?v=0.2.7"></script>
+  <script src="/history.js?v=0.2.9"></script>
 </body>
 </html>

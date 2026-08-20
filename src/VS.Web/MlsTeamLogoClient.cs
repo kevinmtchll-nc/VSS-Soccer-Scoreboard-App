@@ -2,9 +2,10 @@ namespace VS.Web;
 
 public sealed record TeamLogoFile(byte[] Bytes, string ContentType, string Source);
 
-public sealed class MlsTeamLogoClient(HttpClient httpClient)
+public sealed class MlsTeamLogoClient(HttpClient httpClient, SoccerTeamLogoStore logoStore)
 {
     private const string Root = "https://images.mlssoccer.com/image/upload/t_club_logo_medium/";
+    private readonly string _cacheDirectory = CreateCacheDirectory(logoStore.DirectoryPath);
     private static readonly IReadOnlyDictionary<string, string> PublicIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["ATL"] = "assets/mnp/Club_Logo-Atlanta_ugeyc3_hw47tg.png",
@@ -41,13 +42,24 @@ public sealed class MlsTeamLogoClient(HttpClient httpClient)
         ["VAN"] = "assets/logos/mls-clubs/Club_Logo-Vancouver_ao9phl.png"
     };
 
-    public async Task<TeamLogoFile?> GetAsync(string? code, CancellationToken ct)
+    private static readonly IReadOnlyDictionary<string, string> TeamCodes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
-        if (string.IsNullOrWhiteSpace(code) || !PublicIds.TryGetValue(code.Trim(), out var publicId)) return null;
+        ["Atlanta United"]="ATL",["Austin FC"]="ATX",["Charlotte FC"]="CLT",["Chicago Fire FC"]="CHI",["FC Cincinnati"]="CIN",["Colorado Rapids"]="COL",["Columbus Crew"]="CLB",["D.C. United"]="DC",["FC Dallas"]="DAL",["Houston Dynamo FC"]="HOU",["Sporting Kansas City"]="SKC",["LA Galaxy"]="LA",["Los Angeles Football Club"]="LAFC",["Inter Miami CF"]="MIA",["Minnesota United FC"]="MIN",["CF Montréal"]="MTL",["Nashville SC"]="NSH",["New England Revolution"]="NE",["New York Red Bulls"]="RBNY",["New York City Football Club"]="NYC",["Orlando City SC"]="ORL",["Philadelphia Union"]="PHI",["Portland Timbers"]="POR",["Real Salt Lake"]="RSL",["San Diego FC"]="SD",["San Jose Earthquakes"]="SJ",["Seattle Sounders FC"]="SEA",["St. Louis CITY SC"]="STL",["Toronto FC"]="TOR",["Vancouver Whitecaps FC"]="VAN"
+    };
+
+    public async Task<TeamLogoFile?> GetAsync(string? name, string? code, CancellationToken ct)
+    {
+        var resolvedCode = string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(name) && TeamCodes.TryGetValue(name.Trim(), out var mapped) ? mapped : code?.Trim();
+        if (string.IsNullOrWhiteSpace(resolvedCode) || !PublicIds.TryGetValue(resolvedCode, out var publicId)) return null;
+        var cachedPath = Path.Combine(_cacheDirectory, resolvedCode.ToUpperInvariant() + ".png");
+        if (File.Exists(cachedPath)) return new TeamLogoFile(await File.ReadAllBytesAsync(cachedPath, ct), "image/png", "Local MLS cache");
         using var response = await httpClient.GetAsync(Root + publicId, ct);
         if (!response.IsSuccessStatusCode) return null;
         var bytes = await response.Content.ReadAsByteArrayAsync(ct);
         if (bytes.Length == 0) return null;
-        return new TeamLogoFile(bytes, response.Content.Headers.ContentType?.MediaType ?? "image/png", "MLSsoccer.com");
+        await File.WriteAllBytesAsync(cachedPath, bytes, ct);
+        return new TeamLogoFile(bytes, response.Content.Headers.ContentType?.MediaType ?? "image/png", "MLSsoccer.com - cached locally");
     }
+
+    private static string CreateCacheDirectory(string logoDirectory) { var path=Path.Combine(logoDirectory,"MlsCache");Directory.CreateDirectory(path);return path; }
 }

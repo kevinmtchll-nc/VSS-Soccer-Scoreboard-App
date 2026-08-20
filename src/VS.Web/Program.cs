@@ -188,6 +188,8 @@ var themeBackground = new ThemeBackgroundStore(vsConfigDirectory);
 builder.Services.AddSingleton(themeBackground);
 var adMedia = new AdMediaStore(vsConfigDirectory);
 builder.Services.AddSingleton(adMedia);
+var teamLogoStore = new SoccerTeamLogoStore(vsConfigDirectory);
+builder.Services.AddSingleton(teamLogoStore);
 builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLimit = 250L * 1024 * 1024);
 
 builder.Services.AddHttpClient<IMlbStatsClient, MlbStatsClient>(client =>
@@ -209,6 +211,11 @@ builder.Services.AddHttpClient<SportradarLogoClient>(client =>
 {
     client.BaseAddress = new Uri("https://api.sportradar.com/");
     client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"VITEC-Soccer-Scoreboard/{applicationVersion}");
+});
+builder.Services.AddHttpClient<MlsTeamLogoClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(20);
     client.DefaultRequestHeaders.UserAgent.ParseAdd($"VITEC-Soccer-Scoreboard/{applicationVersion}");
 });
 
@@ -1292,14 +1299,29 @@ app.MapGet("/api/soccer/matches", async (string? date, ISoccerStatsClient soccer
 app.MapGet("/api/soccer/matches/{matchId}/matchcenter", async (string matchId, string? date, ISoccerStatsClient soccer, CancellationToken ct) =>
     Results.Ok(await soccer.GetMatchCenterAsync(matchId, DateOnly.TryParse(date, out var parsed) ? parsed : null, ct)));
 
-app.MapGet("/api/soccer/team-logo", async (string name, string? code, SportradarLogoClient logos, HttpContext context, CancellationToken ct) =>
+app.MapGet("/api/soccer/team-logo", async (string name, string? code, SoccerTeamLogoStore uploads, MlsTeamLogoClient mlsLogos, SportradarLogoClient sportradar, HttpContext context, CancellationToken ct) =>
 {
     try
     {
-        var logo = await logos.GetTeamLogoAsync(name, code, ct);
+        var uploaded = await uploads.ReadAsync(code, ct);
+        if (uploaded is not null)
+        {
+            context.Response.Headers.CacheControl = "public,max-age=300";
+            context.Response.Headers["X-Team-Logo-Source"] = uploaded.Source;
+            return Results.File(uploaded.Bytes, uploaded.ContentType);
+        }
+        var mlsLogo = await mlsLogos.GetAsync(code, ct);
+        if (mlsLogo is not null)
+        {
+            context.Response.Headers.CacheControl = "public,max-age=43200";
+            context.Response.Headers["X-Team-Logo-Source"] = mlsLogo.Source;
+            return Results.File(mlsLogo.Bytes, mlsLogo.ContentType);
+        }
+        var logo = await sportradar.GetTeamLogoAsync(name, code, ct);
         if (logo is null) return FallbackLogo(name, code);
         context.Response.Headers.CacheControl = "public,max-age=43200";
         context.Response.Headers["X-Image-Copyright"] = logo.Copyright;
+        context.Response.Headers["X-Team-Logo-Source"] = "Sportradar";
         return Results.File(logo.Bytes, logo.ContentType);
     }
     catch (HttpRequestException) { return FallbackLogo(name, code); }
@@ -1316,7 +1338,19 @@ IResult FallbackLogo(string name, string? code)
     return Results.Text(svg, "image/svg+xml", System.Text.Encoding.UTF8);
 }
 
-app.MapGet("/api/soccer/team-logo/status", (SportradarLogoClient logos) => Results.Ok(new { provider = "Sportradar Images API v3", configured = logos.IsConfigured }));
+app.MapGet("/api/soccer/team-logo/status", (SportradarLogoClient logos, SoccerTeamLogoStore uploads) => Results.Ok(new { provider = "MLSsoccer.com", mlsConfigured = true, configured = logos.IsConfigured, localOverrides = uploads.DirectoryPath, sportradarFallbackConfigured = logos.IsConfigured }));
+
+app.MapPost("/api/soccer/team-logo/upload", async (HttpContext context, SoccerTeamLogoStore uploads, CancellationToken ct) =>
+{
+    if (!IsLocalRequest(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+    try
+    {
+        var form = await context.Request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("logo");
+        return file is null ? Results.BadRequest(new { message = "Choose a team image." }) : Results.Ok(await uploads.SaveAsync(form["code"], file, ct));
+    }
+    catch (Exception ex) { return Results.BadRequest(new { message = ex.Message }); }
+}).DisableAntiforgery();
 
 app.MapPost("/api/soccer/team-logo/settings", async (HttpContext context) =>
 {

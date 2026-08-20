@@ -1,6 +1,14 @@
 const query = new URLSearchParams(location.search);
 const id = query.get('matchId');
 const matchDate = query.get('date') || '';
+const useHistory = query.get('history') === '1';
+
+if (useHistory) {
+  document.querySelector('.app-header p').textContent = 'Stored PostgreSQL MatchCenter snapshot';
+  const backLink = document.querySelector('.header-actions a');
+  backLink.href = '/history.html';
+  backLink.textContent = '← History';
+}
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -100,7 +108,8 @@ restoreLayout();
 async function load() {
   if (!id) return;
   const dateQuery = matchDate ? `?date=${encodeURIComponent(matchDate)}` : '';
-  const response = await fetch(`/api/soccer/matches/${encodeURIComponent(id)}/matchcenter${dateQuery}`, { cache: 'no-store' });
+  const endpoint = useHistory ? `/api/soccer/history/${encodeURIComponent(id)}` : `/api/soccer/matches/${encodeURIComponent(id)}/matchcenter${dateQuery}`;
+  const response = await fetch(endpoint, { cache: 'no-store' });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const matchCenter = await response.json();

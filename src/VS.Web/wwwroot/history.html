@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VITEC Soccer Scoreboard · MLS History</title>
+  <link rel="stylesheet" href="/site.css?v=0.1.5">
+</head>
+<body>
+  <header class="app-header">
+    <div><div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC"><h1>MLS Match History</h1></div><p>PostgreSQL MatchCenter snapshots</p></div>
+    <div class="header-actions"><a href="/">Scoreboard</a><a href="/standings.html">Standings</a><a href="/setup.html">Settings</a></div>
+  </header>
+  <main class="page-shell">
+    <section class="panel">
+      <div class="history-controls"><label><span>Match date</span><input id="historyDate" type="date"></label><button id="loadHistory" type="button">Load History</button><button id="captureDate" type="button">Capture This Date</button></div>
+      <div id="historyStatus" class="setup-banner" aria-live="polite">Loading MLS history…</div>
+    </section>
+    <section id="historyMatches" class="scoreboard-grid" aria-live="polite"></section>
+  </main>
+  <script src="/history.js?v=0.1.5"></script>
+</body>
+</html>

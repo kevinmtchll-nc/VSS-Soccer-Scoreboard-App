@@ -10,7 +10,7 @@ $publishDirectory = Join-Path $root 'artifacts\publish\win-x64'
 $outputDirectory = Join-Path $root 'artifacts\installer'
 $wix = Join-Path $root '.tools\wix.exe'
 $productSource = Join-Path $PSScriptRoot 'wix\Product.wxs'
-$outputMsi = Join-Path $outputDirectory 'VITEC-Soccer-Scoreboard-Setup-v0.2.4.msi'
+$outputMsi = Join-Path $outputDirectory 'VITEC-Soccer-Scoreboard-Setup-v0.2.5.msi'
 
 if (-not (Test-Path -LiteralPath $wix)) {
     throw 'WiX is missing. Run: dotnet tool install wix --tool-path .tools --version 5.0.2'

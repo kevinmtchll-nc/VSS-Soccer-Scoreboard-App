@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>VITEC Soccer MatchCenter</title>
-  <link rel="stylesheet" href="/site.css?v=0.2.4">
+  <link rel="stylesheet" href="/site.css?v=0.2.5">
 </head>
 <body>
   <header class="app-header">
@@ -21,8 +21,11 @@
       <article class="panel draggable-panel" data-panel-id="home" draggable="true"><h2>Home Lineup <span class="drag-indicator" aria-hidden="true">⋮⋮</span></h2><div id="home"></div></article>
     </section>
     <section class="panel"><h2>Team Statistics</h2><div id="stats"></div></section>
-    <section class="panel shot-map-panel"><h2>Shot Map</h2><div id="shot-map"></div></section>
+    <section class="panel shot-map-panel">
+      <div class="shot-map-heading"><div><h2>Shot Map</h2><p class="muted">Choose how the overhead pitch presents shot locations.</p></div><label>Pitch view<select id="shot-map-view"><option value="full">Full Pitch</option><option value="attacking">Attacking Ends</option><option value="teams">Team Comparison</option><option value="heat">Shot Density</option><option value="xg">xG Bubbles</option></select></label></div>
+      <div id="shot-map"></div>
+    </section>
   </main>
-  <script src="/soccer-matchcenter.js?v=0.2.4"></script>
+  <script src="/soccer-matchcenter.js?v=0.2.5"></script>
 </body>
 </html>

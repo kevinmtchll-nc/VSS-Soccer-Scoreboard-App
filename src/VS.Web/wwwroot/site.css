@@ -232,7 +232,8 @@ main { padding: 1rem 1.5rem 2rem; }
 .shot-map-panel { margin-top:1rem; }
 .shot-map-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
 .shot-map-heading h2,.shot-map-heading p { margin:.2rem 0; }
-.shot-map-heading label { min-width:210px; color:var(--muted); font-size:.82rem; }
+.shot-map-controls { display:flex; gap:.75rem; flex-wrap:wrap; }
+.shot-map-heading label { min-width:190px; color:var(--muted); font-size:.82rem; }
 .shot-map-heading select { display:block; width:100%; margin-top:.35rem; }
 .soccer-shot-map { display:block; width:min(100%,1400px); height:auto; margin:.75rem auto 0; border-radius:.8rem; background:#07150e; }
 .soccer-shot-map.team-comparison { width:min(100%,1180px); }

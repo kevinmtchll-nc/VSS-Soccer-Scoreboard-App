@@ -4,7 +4,7 @@
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="VITEC Soccer Scoreboard"
            Manufacturer="VITEC"
-           Version="0.2.5"
+           Version="0.2.6"
            Language="1033"
            Codepage="1252"
            UpgradeCode="4B6EA89C-AE01-489B-932A-DC01846AF03D"

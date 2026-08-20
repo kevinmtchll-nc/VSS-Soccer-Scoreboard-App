@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>VITEC Soccer MatchCenter</title>
-  <link rel="stylesheet" href="/site.css?v=0.2.5">
+  <link rel="stylesheet" href="/site.css?v=0.2.6">
 </head>
 <body>
   <header class="app-header">
@@ -22,10 +22,10 @@
     </section>
     <section class="panel"><h2>Team Statistics</h2><div id="stats"></div></section>
     <section class="panel shot-map-panel">
-      <div class="shot-map-heading"><div><h2>Shot Map</h2><p class="muted">Choose how the overhead pitch presents shot locations.</p></div><label>Pitch view<select id="shot-map-view"><option value="full">Full Pitch</option><option value="attacking">Attacking Ends</option><option value="teams">Team Comparison</option><option value="heat">Shot Density</option><option value="xg">xG Bubbles</option></select></label></div>
+      <div class="shot-map-heading"><div><h2>Shot Map</h2><p class="muted">Choose the shot presentation and field background independently.</p></div><div class="shot-map-controls"><label>Pitch view<select id="shot-map-view"><option value="full">Full Pitch</option><option value="attacking">Attacking Ends</option><option value="teams">Team Comparison</option><option value="heat">Shot Density</option><option value="xg">xG Bubbles</option></select></label><label>Field style<select id="shot-map-style"><option value="broadcast">Broadcast Stripes</option><option value="classic">Classic Grass</option><option value="tactical">Dark Tactical</option><option value="blueprint">Blueprint</option><option value="light">High-Contrast Light</option></select></label></div></div>
       <div id="shot-map"></div>
     </section>
   </main>
-  <script src="/soccer-matchcenter.js?v=0.2.5"></script>
+  <script src="/soccer-matchcenter.js?v=0.2.6"></script>
 </body>
 </html>

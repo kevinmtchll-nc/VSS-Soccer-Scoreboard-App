@@ -123,13 +123,16 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
             try { centers.Add(await GetMatchCenterAsync(match.MatchId, date, cancellationToken)); }
             catch (HttpRequestException) { /* A pre-match feed may not expose details yet. */ }
         }
-        var leaders = centers.SelectMany(center => center.Events.Select(e => (center, e)))
+        var allLeaders = centers.SelectMany(center => center.Events.Select(e => (center, e)))
             .Where(x => x.e.Type == "shot_at_goals" || x.e.SubType == "goals")
             .GroupBy(x => new { x.e.PlayerId, x.e.PlayerName, x.e.TeamId, x.e.TeamName, Category = x.e.SubType == "goals" ? "Goals" : "Shots" })
             .Select(g => new SoccerLeader(g.Key.Category, g.Key.PlayerId, g.Key.PlayerName, g.Key.TeamId, g.Key.TeamName, g.Count()))
             .Concat(centers.SelectMany(c => c.TeamStatistics).Select(s => new SoccerLeader("Expected Goals", "", s.TeamName, s.TeamId, s.TeamName, s.ExpectedGoals)))
             .Where(x => !string.IsNullOrWhiteSpace(x.PlayerName) && x.Value > 0)
-            .OrderBy(x => x.Category).ThenByDescending(x => x.Value).Take(20).ToList();
+            .ToList();
+        var leaders = allLeaders.GroupBy(x => x.Category)
+            .SelectMany(group => group.OrderByDescending(x => x.Value).ThenBy(x => x.PlayerName).Take(5))
+            .OrderBy(x => x.Category).ThenByDescending(x => x.Value).ToList();
         var alerts = centers.SelectMany(c => c.Events.Where(e => e.SubType == "goals" || e.Type == "cards")
             .Select(e => new SoccerAlert(c.Match.MatchId, e.SubType == "goals" ? "goal" : "card", $"{e.Description} — {e.TeamName}", e.Minute)))
             .Concat(centers.Where(c => IsCompleted(c.Match.Status)).Select(c => new SoccerAlert(c.Match.MatchId, "final", $"FINAL: {c.Match.Away.Name} {c.Match.Away.Score}, {c.Match.Home.Name} {c.Match.Home.Score}", c.Match.Minute)))

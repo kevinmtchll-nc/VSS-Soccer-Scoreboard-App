@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified" version="1.0">
+  <xs:element name="vitecSoccerScoreboard">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="generatedAt" type="xs:dateTime"/>
+        <xs:element name="date" type="xs:date"/>
+        <xs:element name="matches">
+          <xs:complexType><xs:sequence><xs:element name="match" type="matchType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType>
+        </xs:element>
+        <xs:element name="selectedMatch" minOccurs="0">
+          <xs:complexType><xs:sequence><xs:element name="events"><xs:complexType><xs:sequence><xs:element name="event" type="eventType" minOccurs="0" maxOccurs="unbounded"/></xs:sequence></xs:complexType></xs:element></xs:sequence><xs:attribute name="id" type="xs:string" use="required"/></xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="schemaVersion" type="xs:string" use="required" fixed="1.0"/>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="teamType"><xs:sequence><xs:element name="name" type="xs:string"/><xs:element name="code" type="xs:string"/><xs:element name="score" type="xs:int"/></xs:sequence><xs:attribute name="id" type="xs:string" use="required"/></xs:complexType>
+  <xs:complexType name="matchType"><xs:sequence><xs:element name="kickoff" type="xs:dateTime"/><xs:element name="status" type="xs:string"/><xs:element name="minute" type="xs:string"/><xs:element name="competition" type="xs:string"/><xs:element name="away" type="teamType"/><xs:element name="home" type="teamType"/></xs:sequence><xs:attribute name="id" type="xs:string" use="required"/></xs:complexType>
+  <xs:complexType name="eventType"><xs:sequence><xs:element name="minute" type="xs:string"/><xs:element name="team" type="xs:string"/><xs:element name="player" type="xs:string"/><xs:element name="description" type="xs:string"/><xs:element name="expectedGoals" type="xs:decimal" minOccurs="0"/></xs:sequence><xs:attribute name="id" type="xs:long" use="required"/><xs:attribute name="type" type="xs:string" use="required"/></xs:complexType>
+</xs:schema>

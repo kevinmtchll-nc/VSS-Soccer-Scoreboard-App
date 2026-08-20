@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vitec.com/schemas/vitec-soccer-feed-1.0.schema.json",
+  "title": "VITEC Soccer Scoreboard Feed",
+  "type": "object",
+  "required": ["source", "schemaVersion", "generatedAt", "date", "matches"],
+  "properties": {
+    "source": { "const": "VITEC Soccer Scoreboard" },
+    "schemaVersion": { "const": "1.0" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "date": { "type": "string", "format": "date" },
+    "matches": { "type": "array", "items": { "$ref": "#/$defs/match" } },
+    "selectedMatch": { "oneOf": [{ "$ref": "#/$defs/matchCenter" }, { "type": "null" }] }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "team": {
+      "type": "object",
+      "required": ["teamId", "name", "shortName", "code", "score", "role"],
+      "properties": {
+        "teamId": { "type": "string" }, "name": { "type": "string" }, "shortName": { "type": "string" },
+        "code": { "type": "string" }, "score": { "type": "integer" }, "role": { "type": "string", "enum": ["home", "away"] }
+      }, "additionalProperties": false
+    },
+    "match": {
+      "type": "object",
+      "required": ["matchId", "plannedKickoff", "status", "minute", "competition", "seasonId", "matchDay", "stadium", "city", "away", "home"],
+      "properties": {
+        "matchId": { "type": "string" }, "plannedKickoff": { "type": "string", "format": "date-time" }, "status": { "type": "string" },
+        "minute": { "type": "string" }, "competition": { "type": "string" }, "seasonId": { "type": "string" }, "matchDay": { "type": "integer" },
+        "stadium": { "type": "string" }, "city": { "type": "string" }, "away": { "$ref": "#/$defs/team" }, "home": { "$ref": "#/$defs/team" }
+      }, "additionalProperties": false
+    },
+    "player": {
+      "type": "object",
+      "required": ["playerId", "firstName", "lastName", "shortName", "position", "shirtNumber", "isStarter", "isOnField", "isCaptain"],
+      "properties": {
+        "playerId": { "type": "string" }, "firstName": { "type": "string" }, "lastName": { "type": "string" }, "shortName": { "type": "string" },
+        "position": { "type": "string" }, "shirtNumber": { "type": ["integer", "null"] }, "isStarter": { "type": "boolean" }, "isOnField": { "type": "boolean" }, "isCaptain": { "type": "boolean" }
+      }, "additionalProperties": false
+    },
+    "side": {
+      "type": "object", "required": ["team", "formation", "players"],
+      "properties": { "team": { "$ref": "#/$defs/team" }, "formation": { "type": "string" }, "players": { "type": "array", "items": { "$ref": "#/$defs/player" } } },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object", "required": ["eventId", "type", "subType", "minute", "period", "eventTime", "teamId", "teamName", "playerId", "playerName", "description", "positionX", "positionY", "expectedGoals", "result"],
+      "properties": {
+        "eventId": { "type": "integer" }, "type": { "type": "string" }, "subType": { "type": "string" }, "minute": { "type": "string" }, "period": { "type": "string" },
+        "eventTime": { "type": ["string", "null"], "format": "date-time" }, "teamId": { "type": "string" }, "teamName": { "type": "string" }, "playerId": { "type": "string" },
+        "playerName": { "type": "string" }, "description": { "type": "string" }, "positionX": { "type": ["number", "null"] }, "positionY": { "type": ["number", "null"] },
+        "expectedGoals": { "type": ["number", "null"] }, "result": { "type": "string" }
+      }, "additionalProperties": false
+    },
+    "statistics": {
+      "type": "object",
+      "required": ["teamId", "teamName", "role", "goals", "shots", "shotsOnTarget", "corners", "fouls", "offsides", "yellowCards", "redCards", "passes", "passCompletion", "possession", "expectedGoals", "saves"],
+      "properties": {
+        "teamId": { "type": "string" }, "teamName": { "type": "string" }, "role": { "type": "string" }, "goals": { "type": "integer" }, "shots": { "type": "integer" },
+        "shotsOnTarget": { "type": "integer" }, "corners": { "type": "integer" }, "fouls": { "type": "integer" }, "offsides": { "type": "integer" },
+        "yellowCards": { "type": "integer" }, "redCards": { "type": "integer" }, "passes": { "type": "integer" }, "passCompletion": { "type": "number" },
+        "possession": { "type": "number" }, "expectedGoals": { "type": "number" }, "saves": { "type": "integer" }
+      }, "additionalProperties": false
+    },
+    "matchCenter": {
+      "type": "object", "required": ["match", "away", "home", "events", "teamStatistics", "updatedAt"],
+      "properties": {
+        "match": { "$ref": "#/$defs/match" }, "away": { "$ref": "#/$defs/side" }, "home": { "$ref": "#/$defs/side" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }, "teamStatistics": { "type": "array", "items": { "$ref": "#/$defs/statistics" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }, "additionalProperties": false
+    }
+  }
+}

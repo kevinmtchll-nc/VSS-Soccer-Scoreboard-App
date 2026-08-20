@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 var serverOverride = Environment.GetEnvironmentVariable("VITEC_SCOREBOARD_SERVER");
+var encoderPath = Environment.GetEnvironmentVariable("VITEC_VIDEO_ENCODER_PATH") ?? @"C:\ffmpeg\bin\ffmpeg.exe";
 var mutexName = string.IsNullOrWhiteSpace(serverOverride)
     ? @"Local\VITECSoccerScoreboard.VideoOutput"
     : @"Local\VITECSoccerScoreboard.VideoOutput.Test";
@@ -57,7 +58,7 @@ while (true)
             var outputUrl = BuildOutputUrl(command.Settings);
             encoderExited = ffmpeg is { HasExited: true };
             var reportedMessage = encoderExited && !message.StartsWith("Browser capture stopped:", StringComparison.Ordinal)
-                ? $"FFmpeg stopped unexpectedly (exit code {ffmpeg?.ExitCode}). Check the FFmpeg path and destination."
+                ? $"The video encoder stopped unexpectedly (exit code {ffmpeg?.ExitCode}). Check the output destination."
                 : message;
             await http.PostAsJsonAsync($"{server}/api/video/worker/status", new WorkerStatus(
                 Running: ffmpeg is { HasExited: false },
@@ -80,7 +81,7 @@ while (true)
 
 async Task<(VS.VideoOutput.EmbeddedRenderer renderer, Process ffmpegProcess, string status)> StartOutput(VideoSettings settings, string server)
 {
-    if (!File.Exists(settings.FfmpegPath)) throw new FileNotFoundException("FFmpeg was not found at the configured path.", settings.FfmpegPath);
+    if (!File.Exists(encoderPath)) throw new FileNotFoundException("The required video encoder is unavailable.");
     var sceneUrl = $"{server}/output.html?scene={Uri.EscapeDataString(settings.Scene)}" +
                    (settings.Scene != "scoreboard" && !string.IsNullOrWhiteSpace(settings.MatchId) ? $"&matchId={Uri.EscapeDataString(settings.MatchId)}" : "") +
                    (settings.Scene == "game-workspace" && !string.IsNullOrWhiteSpace(settings.TemplateId) ? $"&template={Uri.EscapeDataString(settings.TemplateId)}" : "");
@@ -89,7 +90,7 @@ async Task<(VS.VideoOutput.EmbeddedRenderer renderer, Process ffmpegProcess, str
     var embeddedRenderer = await VS.VideoOutput.EmbeddedRenderer.CreateAsync(sceneUrl, renderWidth, renderHeight);
     try
     {
-        var ffmpegInfo = new ProcessStartInfo(settings.FfmpegPath)
+        var ffmpegInfo = new ProcessStartInfo(encoderPath)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -97,7 +98,7 @@ async Task<(VS.VideoOutput.EmbeddedRenderer renderer, Process ffmpegProcess, str
             RedirectStandardError = true
         };
         foreach (var argument in BuildArguments(settings)) ffmpegInfo.ArgumentList.Add(argument);
-        var ffmpegProcess = Process.Start(ffmpegInfo) ?? throw new InvalidOperationException("Unable to start FFmpeg.");
+        var ffmpegProcess = Process.Start(ffmpegInfo) ?? throw new InvalidOperationException("Unable to start the video encoder.");
         captureCancellation = new CancellationTokenSource();
         captureTask = PumpBrowserFramesAsync(embeddedRenderer, ffmpegProcess, settings, captureCancellation.Token);
         return (embeddedRenderer, ffmpegProcess, $"Streaming {settings.Scene} to {BuildOutputUrl(settings)}");
@@ -170,8 +171,8 @@ async Task PumpBrowserFramesAsync(VS.VideoOutput.EmbeddedRenderer embeddedRender
             var ffmpegError = (await errorTask).Trim();
             throw new InvalidOperationException(
                 string.IsNullOrWhiteSpace(ffmpegError)
-                    ? $"FFmpeg stopped while receiving browser frames (exit code {ffmpegProcess.ExitCode})."
-                    : $"FFmpeg stopped while receiving browser frames: {ffmpegError}", ex);
+                    ? $"The video encoder stopped while receiving browser frames (exit code {ffmpegProcess.ExitCode})."
+                    : $"The video encoder stopped while receiving browser frames: {ffmpegError}", ex);
         }
 
         var elapsed = Stopwatch.GetElapsedTime(started);
@@ -201,4 +202,4 @@ void Stop(Process? process)
 
 sealed record WorkerCommand(VideoSettings Settings, bool DesiredRunning, long Revision);
 sealed record WorkerStatus(bool Running, string Message, int? FfmpegProcessId, string OutputUrl);
-sealed record VideoSettings(string FfmpegPath, string Protocol, string Destination, int Port, string Scene, string? TemplateId, string? MatchId, int Width, int Height, int FrameRate, int VideoBitrateKbps, int SrtLatencyMs);
+sealed record VideoSettings(string Protocol, string Destination, int Port, string Scene, string? TemplateId, string? MatchId, int Width, int Height, int FrameRate, int VideoBitrateKbps, int SrtLatencyMs);

@@ -1,1 +1,28 @@
-<!doctype html><html lang="en-US"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>VITEC Soccer Scoreboard · MLS Standings</title><link rel="stylesheet" href="/site.css?v=0.1.1"></head><body><header class="app-header"><div><div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC"><h1>MLS Standings</h1></div><p>VITEC Soccer Scoreboard</p></div><div class="header-actions"><a href="/">Scoreboard</a><a href="/setup.html">Settings</a></div></header><main class="page-shell"><section class="panel"><div class="section-heading-row"><h2>League Table</h2><span id="standingsStatus">Loading MLS standings…</span></div><div class="help-table-wrap"><table><thead><tr><th>#</th><th>Club</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead><tbody id="standingsBody"></tbody></table></div></section></main><script src="/standings.js?v=0.1.1"></script></body></html>
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VITEC Soccer Scoreboard · MLS Standings</title>
+  <link rel="stylesheet" href="/site.css?v=0.2.3">
+</head>
+<body>
+  <header class="app-header">
+    <div><div class="brand-title-row"><img src="/images/vitec-logo.png" alt="VITEC"><h1>MLS Standings</h1></div><p>VITEC Soccer Scoreboard</p></div>
+    <div class="header-actions"><a href="/">Scoreboard</a><a href="/setup.html">Settings</a></div>
+  </header>
+  <main class="page-shell standings-page">
+    <section class="panel standings-panel">
+      <div class="section-heading-row standings-title-row"><div><span class="section-kicker">Major League Soccer</span><h2>League Table</h2></div><span id="standingsStatus" class="standings-status">Loading MLS standings…</span></div>
+      <div class="standings-table-wrap">
+        <table class="soccer-standings-table">
+          <colgroup><col class="rank-column"><col class="club-column"><col span="8" class="stat-column"></colgroup>
+          <thead><tr><th>#</th><th class="club-heading">Club</th><th>MP</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead>
+          <tbody id="standingsBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="/standings.js?v=0.2.3"></script>
+</body>
+</html>

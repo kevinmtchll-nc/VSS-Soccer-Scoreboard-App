@@ -4,6 +4,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml.Linq;
 using System.Diagnostics;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Net.NetworkInformation;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -218,6 +220,7 @@ builder.Services.AddHttpClient<MlsTeamLogoClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(20);
     client.DefaultRequestHeaders.UserAgent.ParseAdd($"VITEC-Soccer-Scoreboard/{applicationVersion}");
 });
+builder.Services.AddHttpClient("EzTvDsm", client => client.Timeout = TimeSpan.FromSeconds(30));
 
 var pgConnection = builder.Configuration.GetConnectionString("VSPostgres");
 
@@ -1492,6 +1495,86 @@ app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? mat
         new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), new XElement("competition", m.Competition), Team("away", m.Away), Team("home", m.Home)))),
         selected is null ? null : new XElement("selectedMatch", new XAttribute("id", selected.Match.MatchId), new XElement("events", selected.Events.Select(e => new XElement("event", new XAttribute("id", e.EventId), new XAttribute("type", e.Type), new XElement("minute", e.Minute), new XElement("team", e.TeamName), new XElement("player", e.PlayerName), new XElement("description", e.Description), e.ExpectedGoals is null ? null : new XElement("expectedGoals", e.ExpectedGoals)))))));
     return Results.Text(xml.ToString(), "application/xml");
+});
+
+var dsmSettingsPath = Path.Combine(vsConfigDirectory, "eztv-dsm.json");
+app.MapGet("/api/integrations/eztv-dsm/status", () =>
+{
+    JsonObject value;
+    try { value = File.Exists(dsmSettingsPath) ? JsonNode.Parse(File.ReadAllText(dsmSettingsPath))?.AsObject() ?? new JsonObject() : new JsonObject(); }
+    catch { value = new JsonObject(); }
+    var targetUrl = value["targetUrl"]?.GetValue<string>() ?? "";
+    return Results.Ok(new { configured = Uri.TryCreate(targetUrl, UriKind.Absolute, out _), targetUrl, format = value["format"]?.GetValue<string>() ?? "json", apiKeyConfigured = !string.IsNullOrWhiteSpace(value["apiKey"]?.GetValue<string>()) });
+});
+
+app.MapPost("/api/integrations/eztv-dsm/settings", async (HttpRequest request, CancellationToken ct) =>
+{
+    try
+    {
+        using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
+        var root = document.RootElement;
+        var targetUrl = root.TryGetProperty("targetUrl", out var targetNode) ? targetNode.GetString()?.Trim() ?? "" : "";
+        if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var target) || target.Scheme is not ("http" or "https")) return Results.BadRequest(new { message = "Enter a valid HTTP or HTTPS DSM endpoint." });
+        var format = root.TryGetProperty("format", out var formatNode) && formatNode.GetString()?.Equals("xml", StringComparison.OrdinalIgnoreCase) == true ? "xml" : "json";
+        var existing = File.Exists(dsmSettingsPath) ? JsonNode.Parse(await File.ReadAllTextAsync(dsmSettingsPath, ct))?.AsObject() ?? new JsonObject() : new JsonObject();
+        var apiKey = root.TryGetProperty("apiKey", out var keyNode) ? keyNode.GetString()?.Trim() : null;
+        existing["targetUrl"] = targetUrl;
+        existing["format"] = format;
+        if (!string.IsNullOrWhiteSpace(apiKey)) existing["apiKey"] = apiKey;
+        await File.WriteAllTextAsync(dsmSettingsPath, existing.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+        return Results.Ok(new { message = "EZ TV DSM integration settings saved." });
+    }
+    catch (Exception ex) { return Results.BadRequest(new { message = ex.Message }); }
+});
+
+app.MapPost("/api/integrations/eztv-dsm/test", async (IHttpClientFactory clients, CancellationToken ct) =>
+{
+    try
+    {
+        var value = JsonNode.Parse(await File.ReadAllTextAsync(dsmSettingsPath, ct))?.AsObject() ?? new JsonObject();
+        var targetUrl = value["targetUrl"]?.GetValue<string>() ?? "";
+        if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var target)) return Results.BadRequest(new { message = "Save a DSM endpoint first." });
+        using var message = new HttpRequestMessage(HttpMethod.Options, target);
+        var apiKey = value["apiKey"]?.GetValue<string>();
+        if (!string.IsNullOrWhiteSpace(apiKey)) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        using var response = await clients.CreateClient("EzTvDsm").SendAsync(message, ct);
+        return Results.Ok(new { message = $"DSM endpoint responded with HTTP {(int)response.StatusCode} {response.ReasonPhrase}." });
+    }
+    catch (Exception ex) { return Results.Json(new { message = $"DSM connection failed: {ex.Message}" }, statusCode: StatusCodes.Status502BadGateway); }
+});
+
+app.MapPost("/api/integrations/eztv-dsm/push", async (string? date, string? matchId, ISoccerStatsClient soccer, IHttpClientFactory clients, CancellationToken ct) =>
+{
+    try
+    {
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(dsmSettingsPath, ct))?.AsObject() ?? new JsonObject();
+        var targetUrl = settings["targetUrl"]?.GetValue<string>() ?? "";
+        if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var target)) return Results.BadRequest(new { message = "Save a DSM endpoint first." });
+        var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
+        var matches = await soccer.GetScheduleAsync(targetDate, ct);
+        var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, targetDate, ct);
+        var format = settings["format"]?.GetValue<string>()?.Equals("xml", StringComparison.OrdinalIgnoreCase) == true ? "xml" : "json";
+        HttpContent content;
+        if (format == "xml")
+        {
+            static XElement DsmTeam(string name, SoccerTeam team) => new(name, new XAttribute("id", team.TeamId), new XElement("name", team.Name), new XElement("code", team.Code), new XElement("score", team.Score));
+            var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.0"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", targetDate.ToString("yyyy-MM-dd")), new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), DsmTeam("away", m.Away), DsmTeam("home", m.Home))))));
+            content = new StringContent(xml.ToString(), Encoding.UTF8, "application/xml");
+        }
+        else
+        {
+            var payload = new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.0", generatedAt = DateTimeOffset.UtcNow, date = targetDate, matches, selectedMatch = selected };
+            content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        }
+        using var message = new HttpRequestMessage(HttpMethod.Post, target) { Content = content };
+        var apiKey = settings["apiKey"]?.GetValue<string>();
+        if (!string.IsNullOrWhiteSpace(apiKey)) message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        using var response = await clients.CreateClient("EzTvDsm").SendAsync(message, ct);
+        var responseBody = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode) return Results.Json(new { message = $"DSM rejected the push with HTTP {(int)response.StatusCode} {response.ReasonPhrase}.", response = responseBody[..Math.Min(responseBody.Length, 500)] }, statusCode: StatusCodes.Status502BadGateway);
+        return Results.Ok(new { message = $"{format.ToUpperInvariant()} feed pushed to EZ TV DSM successfully.", status = (int)response.StatusCode, matches = matches.Count });
+    }
+    catch (Exception ex) { return Results.Json(new { message = $"DSM push failed: {ex.Message}" }, statusCode: StatusCodes.Status502BadGateway); }
 });
 
 app.MapFallbackToFile("index.html");

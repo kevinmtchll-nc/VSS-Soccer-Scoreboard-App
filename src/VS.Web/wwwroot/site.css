@@ -1473,3 +1473,51 @@ body.dashboard-dragging #liveDetailPanel>.panel { transition:none!important; }
 .help-grid a { color:#8fd5ff; }
 @media (max-width:800px) { .help-grid { grid-template-columns:1fr; } .help-wide { grid-column:auto; } .help-intro { align-items:flex-start; flex-direction:column; } }
 .team-logo{width:42px;height:42px;object-fit:contain;vertical-align:middle;flex:0 0 42px}.gc-team-logo{width:76px;height:76px;object-fit:contain;display:block;margin:0 auto 8px}
+
+/* Soccer scoreboard: compact 4:3-style match tiles */
+.scoreboard-grid { display:grid; grid-template-columns:repeat(4,minmax(250px,1fr)); gap:1rem; align-items:stretch; }
+.scoreboard-grid .game-card { aspect-ratio:4/3; min-height:0; padding:1.1rem; overflow:hidden; }
+.game-card-top { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; min-height:2.4rem; margin-bottom:.5rem; }
+.game-card-top>span { max-width:58%; overflow:hidden; text-align:right; text-overflow:ellipsis; white-space:nowrap; }
+.team-row { display:grid; grid-template-columns:48px minmax(0,1fr) auto; align-items:center; gap:.8rem; min-height:64px; padding:.42rem 0; border-bottom:1px solid rgba(113,139,171,.16); }
+.team-row .team-logo { width:46px; height:46px; }
+.team-name-wrap { min-width:0; }
+.team-name-wrap strong { display:block; overflow:hidden; font-size:clamp(.88rem,1vw,1.05rem); text-overflow:ellipsis; white-space:nowrap; }
+.team-name-wrap span { display:block; margin-top:.12rem; font-size:.72rem; }
+.team-score { min-width:2ch; color:#f7fbff; font-size:clamp(1.5rem,2vw,2.2rem); line-height:1; text-align:right; }
+.game-context { margin-top:auto; padding-top:.65rem; color:var(--muted); font-size:.78rem; }
+.game-center-link { display:inline-flex; align-items:center; width:max-content; margin-top:.55rem; color:#91d4ff; font-size:.82rem; font-weight:800; text-decoration:none; }
+.game-center-link:hover { text-decoration:underline; }
+@media (max-width:1500px) { .scoreboard-grid { grid-template-columns:repeat(3,minmax(250px,1fr)); } }
+@media (max-width:1050px) { .scoreboard-grid { grid-template-columns:repeat(2,minmax(260px,1fr)); } }
+@media (max-width:620px) { .scoreboard-grid { grid-template-columns:1fr; } .scoreboard-grid .game-card { aspect-ratio:auto; min-height:300px; } }
+
+/* Full-width MLS standings */
+.standings-page { width:min(1800px,calc(100% - 2rem)); margin:1.5rem auto 3rem; padding:0; }
+.standings-panel { padding:0; overflow:hidden; }
+.standings-title-row { padding:1.25rem 1.5rem; border-bottom:1px solid var(--border); }
+.standings-title-row h2 { margin:.2rem 0 0; font-size:1.4rem; }
+.section-kicker { color:#8dd4ff; font-size:.75rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
+.standings-status { color:var(--muted); font-size:.9rem; }
+.standings-table-wrap { width:100%; overflow-x:auto; }
+.soccer-standings-table { width:100%; min-width:760px; table-layout:fixed; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.soccer-standings-table .rank-column { width:6%; }
+.soccer-standings-table .club-column { width:38%; }
+.soccer-standings-table .stat-column { width:7%; }
+.soccer-standings-table th,.soccer-standings-table td { padding:.8rem 1rem; border-bottom:1px solid rgba(113,139,171,.18); text-align:center; vertical-align:middle; }
+.soccer-standings-table th { color:#91b5d8; background:#0b121c; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
+.soccer-standings-table .club-heading { text-align:left; }
+.soccer-standings-table tbody tr:nth-child(even) { background:rgba(28,49,73,.22); }
+.soccer-standings-table tbody tr:hover { background:rgba(46,112,161,.2); }
+.rank-cell { color:#8eb4d6; font-weight:800; }
+.standings-club { display:flex; align-items:center; gap:1rem; min-width:0; text-align:left; }
+.standings-club-logo { width:44px; height:44px; flex:0 0 44px; object-fit:contain; }
+.standings-club strong { display:block; overflow:hidden; color:var(--text); font-size:1rem; text-overflow:ellipsis; white-space:nowrap; }
+.standings-club span { display:block; margin-top:.12rem; color:var(--muted); font-size:.72rem; font-weight:800; letter-spacing:.08em; }
+.points-cell { color:#9ed7ff; font-size:1.05rem; font-weight:900; background:rgba(35,106,159,.12); }
+.goal-difference { font-weight:700; }
+.standings-skeleton td span { display:inline-block; width:28px; height:12px; border-radius:5px; background:linear-gradient(90deg,#172334 25%,#24344a 50%,#172334 75%); background-size:200% 100%; animation:standings-pulse 1.25s infinite; }
+.standings-skeleton .skeleton-logo { width:44px; height:44px; border-radius:50%; vertical-align:middle; }
+.standings-skeleton .skeleton-name { width:45%; margin-left:1rem; vertical-align:middle; }
+@keyframes standings-pulse { to { background-position:-200% 0; } }
+@media (max-width:800px) { .standings-page { width:calc(100% - 1rem); margin:.5rem auto 2rem; } .standings-title-row { align-items:flex-start; flex-direction:column; padding:1rem; } .soccer-standings-table th,.soccer-standings-table td { padding:.7rem .55rem; } }

@@ -3,7 +3,6 @@ using System.Text.Json;
 namespace VS.Web;
 
 public sealed record VideoOutputSettings(
-    string FfmpegPath = @"C:\ffmpeg\bin\ffmpeg.exe",
     string Protocol = "udp",
     string Destination = "239.10.10.10",
     int Port = 5004,
@@ -50,7 +49,14 @@ public sealed class VideoOutputCoordinator
                 settings = _settings,
                 desiredRunning = _desiredRunning,
                 revision = _revision,
-                worker = _worker with { Connected = connected }
+                worker = new
+                {
+                    connected,
+                    _worker.Running,
+                    _worker.Message,
+                    _worker.LastSeenUtc,
+                    _worker.OutputUrl
+                }
             };
         }
     }

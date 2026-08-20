@@ -9,6 +9,7 @@ const localDate = new Date();
 dateInput.value = `${localDate.getFullYear()}-${String(localDate.getMonth()+1).padStart(2,'0')}-${String(localDate.getDate()).padStart(2,'0')}`;
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const setHtmlIfChanged = (element, html) => { if (element.innerHTML !== html) element.innerHTML = html; };
 const statusText = status => ({scheduled:'Scheduled',warmup:'Warmup',firstHalf:'First Half',halfTime:'Halftime',secondHalf:'Second Half',finalWhistle:'Final',postponed:'Postponed'}[status] || status || 'Scheduled');
 
 function teamRow(team) {
@@ -18,7 +19,7 @@ function teamRow(team) {
 
 function renderLeaders(targetId, leaders, decimals = 0) {
   const target = document.querySelector(targetId);
-  target.innerHTML = leaders.length ? leaders.slice(0, 5).map(leader => `<div class="leader-row"><strong>${esc(leader.playerName)}<small>${esc(leader.teamName === leader.playerName ? '' : leader.teamName)}</small></strong><span>${Number(leader.value).toFixed(decimals)}</span></div>`).join('') : '<p class="muted">No results yet.</p>';
+  setHtmlIfChanged(target, leaders.length ? leaders.slice(0, 5).map(leader => `<div class="leader-row"><strong>${esc(leader.playerName)}<small>${esc(leader.teamName === leader.playerName ? '' : leader.teamName)}</small></strong><span>${Number(leader.value).toFixed(decimals)}</span></div>`).join('') : '<p class="muted">No results yet.</p>');
 }
 
 async function loadSummary() {
@@ -31,7 +32,7 @@ async function loadSummary() {
     renderLeaders('#shotLeaders', category('Shots'));
     renderLeaders('#xgLeaders', category('Expected Goals'), 2);
     const alerts = document.querySelector('#matchAlerts');
-    alerts.innerHTML = summary.alerts.length ? summary.alerts.slice(-8).reverse().map(alert => `<a class="alert-row ${esc(alert.kind)}" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(alert.matchId)}&date=${encodeURIComponent(dateInput.value)}"><strong>${esc(alert.minute ? `${alert.minute}'` : alert.kind.toUpperCase())}</strong><span>${esc(alert.text)}</span></a>`).join('') : '<p class="muted">No match alerts yet.</p>';
+    setHtmlIfChanged(alerts, summary.alerts.length ? summary.alerts.slice(-8).reverse().map(alert => `<a class="alert-row ${esc(alert.kind)}" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(alert.matchId)}&date=${encodeURIComponent(dateInput.value)}"><strong>${esc(alert.minute ? `${alert.minute}'` : alert.kind.toUpperCase())}</strong><span>${esc(alert.text)}</span></a>`).join('') : '<p class="muted">No match alerts yet.</p>');
     summaryUpdated.textContent = `Updated ${new Date(summary.updatedAt).toLocaleTimeString()}`;
   } catch (error) {
     summaryUpdated.textContent = `Leaders unavailable: ${error.message}`;
@@ -39,19 +40,26 @@ async function loadSummary() {
 }
 
 async function load() {
-  matches.innerHTML = '<article class="panel">Loading MLS matches…</article>';
+  if (!matches.children.length) matches.innerHTML = '<article class="panel">Loading MLS matches…</article>';
   try {
     const response = await fetch(`/api/soccer/matches?date=${encodeURIComponent(dateInput.value)}`, {cache:'no-store'});
     if (!response.ok) throw new Error(`Request failed (${response.status})`);
     const data = await response.json();
     matchCount.textContent = `${data.length} MLS ${data.length === 1 ? 'match' : 'matches'}`;
     updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
-    matches.innerHTML = data.length ? data.map(game => `<article class="game-card">
+    const cards = data.map(game => `<article class="game-card" data-match-id="${esc(game.matchId)}">
       <div class="game-card-top"><strong>${esc(statusText(game.status))}${game.minute ? ` · ${esc(game.minute)}'` : ''}</strong><span class="muted">${esc(game.stadium)}</span></div>
       ${teamRow(game.away)}${teamRow(game.home)}
       <div class="game-context">Matchweek ${game.matchDay} · ${new Date(game.plannedKickoff).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</div>
       <a class="game-center-link" href="/soccer-matchcenter.html?matchId=${encodeURIComponent(game.matchId)}&date=${encodeURIComponent(dateInput.value)}">Open MatchCenter</a>
-    </article>`).join('') : '<article class="panel">No MLS matches are scheduled for this date.</article>';
+    </article>`);
+    if (!cards.length) setHtmlIfChanged(matches, '<article class="panel">No MLS matches are scheduled for this date.</article>');
+    else {
+      const existing=new Map([...matches.querySelectorAll('[data-match-id]')].map(card=>[card.dataset.matchId,card]));
+      matches.querySelectorAll(':scope > .panel:not([data-match-id])').forEach(node=>node.remove());
+      cards.forEach((html,index)=>{const template=document.createElement('template');template.innerHTML=html.trim();const next=template.content.firstElementChild,current=existing.get(next.dataset.matchId);if(current&&current.innerHTML===next.innerHTML){if(matches.children[index]!==current)matches.insertBefore(current,matches.children[index]||null);}else if(current){current.replaceWith(next);}else{matches.insertBefore(next,matches.children[index]||null);}existing.delete(next.dataset.matchId);});
+      existing.forEach(card=>card.remove());
+    }
   } catch (error) {
     matches.innerHTML = `<article class="panel error">Unable to load MLS matches: ${esc(error.message)}</article>`;
   }

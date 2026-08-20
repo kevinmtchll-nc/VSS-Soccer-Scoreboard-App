@@ -1421,6 +1421,51 @@ app.MapGet("/api/soccer/history/{matchId}", async (string matchId, IServiceProvi
     }
 });
 
+app.MapGet("/api/soccer/history-export", async (string? date, string? format, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { message = "PostgreSQL is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : (DateOnly?)null;
+    var rows = await store.ListAsync(targetDate, 500, ct);
+    var stamp = targetDate?.ToString("yyyy-MM-dd") ?? "all";
+    if (format?.Equals("xml", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        var xml = new XDocument(new XElement("vitecSoccerHistory", new XAttribute("schemaVersion", "1.0"), new XAttribute("exportedAt", DateTimeOffset.UtcNow.ToString("O")), rows.Select(row => new XElement("snapshot", new XAttribute("matchId", row.MatchId), new XAttribute("matchDate", row.MatchDate), new XAttribute("capturedAt", row.CapturedAtUtc.ToString("O")), new XCData(row.PayloadJson)))));
+        return Results.File(Encoding.UTF8.GetBytes(xml.ToString()), "application/xml", $"VITEC-Soccer-History-{stamp}.xml");
+    }
+    var snapshots = rows.Select(row => new { matchId = row.MatchId, matchDate = row.MatchDate, capturedAtUtc = row.CapturedAtUtc, payload = JsonSerializer.Deserialize<JsonElement>(row.PayloadJson) });
+    var export = JsonSerializer.SerializeToUtf8Bytes(new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.0", exportedAt = DateTimeOffset.UtcNow, snapshots }, new JsonSerializerOptions { WriteIndented = true });
+    return Results.File(export, "application/json", $"VITEC-Soccer-History-{stamp}.json");
+});
+
+app.MapPost("/api/soccer/history-import", async (HttpRequest request, IServiceProvider services, CancellationToken ct) =>
+{
+    var store = services.GetService<SoccerMatchHistoryStore>();
+    if (store is null) return Results.Json(new { message = "PostgreSQL is not configured." }, statusCode: StatusCodes.Status503ServiceUnavailable);
+    try
+    {
+        var form = await request.ReadFormAsync(ct);
+        var file = form.Files.GetFile("history");
+        if (file is null || file.Length == 0) return Results.BadRequest(new { message = "Choose a VITEC Soccer history JSON file." });
+        if (file.Length > 250L * 1024 * 1024) return Results.BadRequest(new { message = "History import files are limited to 250 MB." });
+        using var document = await JsonDocument.ParseAsync(file.OpenReadStream(), cancellationToken: ct);
+        if (!document.RootElement.TryGetProperty("snapshots", out var snapshots) || snapshots.ValueKind != JsonValueKind.Array) return Results.BadRequest(new { message = "The file does not contain a snapshots array." });
+        var imported = 0; var failed = new List<object>();
+        foreach (var item in snapshots.EnumerateArray())
+        {
+            try
+            {
+                if (!item.TryGetProperty("payload", out var payload)) throw new InvalidDataException("Snapshot payload is missing.");
+                var center = payload.Deserialize<SoccerMatchCenter>(new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? throw new InvalidDataException("Snapshot payload is invalid.");
+                await store.CaptureAsync(center, ct); imported++;
+            }
+            catch (Exception ex) { failed.Add(new { matchId = item.TryGetProperty("matchId", out var idNode) ? idNode.GetString() : "", message = ex.Message }); }
+        }
+        return Results.Ok(new { message = $"Imported {imported} historical MLS snapshot{(imported == 1 ? "" : "s")}.", imported, failed });
+    }
+    catch (JsonException ex) { return Results.BadRequest(new { message = $"Invalid history JSON: {ex.Message}" }); }
+});
+
 app.MapPost("/api/soccer/history/capture/{matchId}", async (string matchId, string? date, ISoccerStatsClient soccer, IServiceProvider services, CancellationToken ct) =>
 {
     var store = services.GetService<SoccerMatchHistoryStore>();

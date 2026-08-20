@@ -44,5 +44,8 @@ function showError(error) {
 
 document.querySelector('#loadHistory').addEventListener('click', () => loadHistory().catch(showError));
 document.querySelector('#captureDate').addEventListener('click', () => captureDate().catch(showError));
+document.querySelector('#exportHistoryJson').addEventListener('click',()=>{location.href=`/api/soccer/history-export?date=${encodeURIComponent(dateInput.value)}&format=json`;});
+document.querySelector('#exportHistoryXml').addEventListener('click',()=>{location.href=`/api/soccer/history-export?date=${encodeURIComponent(dateInput.value)}&format=xml`;});
+document.querySelector('#importHistory').addEventListener('click',async()=>{const file=document.querySelector('#historyImportFile').files[0];if(!file){statusNode.textContent='Choose a VITEC Soccer history JSON file first.';return;}const form=new FormData();form.append('history',file);statusNode.textContent='Importing historical MLS snapshots…';try{const response=await fetch('/api/soccer/history-import',{method:'POST',body:form}),data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.message||`HTTP ${response.status}`);statusNode.textContent=data.message;document.querySelector('#historyImportFile').value='';await loadHistory();}catch(error){showError(error);}});
 dateInput.addEventListener('change', () => loadHistory().catch(showError));
 loadHistory().catch(showError);

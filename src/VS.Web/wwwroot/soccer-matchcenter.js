@@ -13,8 +13,15 @@ if (useHistory) {
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[character]));
+const setHtmlIfChanged = (element, html) => { if (element.innerHTML !== html) element.innerHTML = html; };
 
-const playerList = side => `<h3>${esc(side.team.name)} · ${esc(side.formation)}</h3><table><thead><tr><th>#</th><th>Player</th><th>Position</th></tr></thead><tbody>${side.players.filter(player => player.isStarter).map(player => `<tr><td>${player.shirtNumber ?? ''}</td><td>${esc(player.firstName)} ${esc(player.lastName)}${player.isCaptain ? ' (C)' : ''}</td><td>${esc(player.position)}</td></tr>`).join('')}</tbody></table>`;
+const playerList = side => `<h3>${esc(side.team.name)} · ${esc(side.formation)}</h3><div class="soccer-table-scroll"><table class="soccer-data-table lineup-table"><colgroup><col class="number-col"><col class="player-col"><col class="position-col"></colgroup><thead><tr><th>#</th><th>Player</th><th>Position</th></tr></thead><tbody>${side.players.filter(player => player.isStarter).map(player => `<tr><td>${player.shirtNumber ?? ''}</td><td>${esc(player.firstName)} ${esc(player.lastName)}${player.isCaptain ? ' (C)' : ''}</td><td>${esc(player.position)}</td></tr>`).join('')}</tbody></table></div>`;
+
+function shotMap(matchCenter) {
+  const shots=matchCenter.events.filter(event=>(event.type==='shot_at_goals'||event.subType==='goals')&&Number.isFinite(event.x)&&Number.isFinite(event.y));
+  const marks=shots.map(event=>{const x=Math.max(0,Math.min(105,Number(event.x))),y=Math.max(0,Math.min(68,Number(event.y))),goal=event.subType==='goals',home=event.teamId===matchCenter.match.home.teamId,r=goal?2.2:Math.max(1.15,Math.min(2,1.1+Number(event.expectedGoals||0)*2.2)),color=home?'#ffc857':'#66bfff';return `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" stroke="${goal?'#fff':'#08111d'}" stroke-width="${goal?'.8':'.35'}" opacity=".9"><title>${esc(event.playerName||'Unknown player')} · ${esc(event.description)} · ${esc(event.minute)}'${event.expectedGoals==null?'':` · xG ${Number(event.expectedGoals).toFixed(2)}`}</title></circle>`;}).join('');
+  return `<div class="shot-map-legend"><span><i class="away-shot"></i>${esc(matchCenter.match.away.name)}</span><span><i class="home-shot"></i>${esc(matchCenter.match.home.name)}</span><span><i class="goal-shot"></i>Goal</span><strong>${shots.length} located shots</strong></div><svg class="soccer-shot-map" viewBox="-3 -4 111 76" role="img" aria-label="Overhead pitch showing shot locations"><rect x="0" y="0" width="105" height="68" rx="1" fill="#12643a" stroke="#d9f2df" stroke-width=".6"/><path d="M52.5 0V68 M0 13.84H16.5V54.16H0 M105 13.84H88.5V54.16H105 M0 24.84H5.5V43.16H0 M105 24.84H99.5V43.16H105" fill="none" stroke="#d9f2df" stroke-width=".55"/><circle cx="52.5" cy="34" r="9.15" fill="none" stroke="#d9f2df" stroke-width=".55"/><circle cx="52.5" cy="34" r=".7" fill="#d9f2df"/><circle cx="11" cy="34" r=".55" fill="#d9f2df"/><circle cx="94" cy="34" r=".55" fill="#d9f2df"/>${marks}</svg>`;
+}
 
 const teamMark = team => `<img class="gc-team-logo" src="/api/soccer/team-logo?name=${encodeURIComponent(team.name)}&code=${encodeURIComponent(team.code || '')}" alt="" onerror="this.hidden=true"><strong>${esc(team.name)}</strong>`;
 
@@ -114,12 +121,13 @@ async function load() {
 
   const matchCenter = await response.json();
   const match = matchCenter.match;
-  document.querySelector('#score').innerHTML = `<div class="gc-team away">${teamMark(match.away)}</div><div class="gc-score-center"><div class="gc-score-num">${match.away.score} – ${match.home.score}</div><div class="gc-status">${matchStatus(match)}</div></div><div class="gc-team home">${teamMark(match.home)}</div>`;
-  document.querySelector('#context').innerHTML = `<span>${esc(match.competition)}</span><span>${esc(match.stadium)}</span><span>Matchweek ${match.matchDay}</span>`;
-  document.querySelector('#away').innerHTML = playerList(matchCenter.away);
-  document.querySelector('#home').innerHTML = playerList(matchCenter.home);
-  document.querySelector('#timeline').innerHTML = matchCenter.events.slice(0, 20).map(event => `<div class="pitch-item"><strong>${esc(event.minute)}' · ${esc(event.description)}</strong><span class="muted">${esc(event.teamName)}</span></div>`).join('');
-  document.querySelector('#stats').innerHTML = `<table><thead><tr><th>Team</th><th>Possession</th><th>Shots</th><th>On Target</th><th>xG</th><th>Corners</th><th>Fouls</th><th>Cards</th></tr></thead><tbody>${matchCenter.teamStatistics.map(stat => `<tr><td>${esc(stat.teamName)}</td><td>${stat.possession.toFixed(1)}%</td><td>${stat.shots}</td><td>${stat.shotsOnTarget}</td><td>${stat.expectedGoals.toFixed(2)}</td><td>${stat.corners}</td><td>${stat.fouls}</td><td>${stat.yellowCards}Y ${stat.redCards}R</td></tr>`).join('')}</tbody></table>`;
+  setHtmlIfChanged(document.querySelector('#score'), `<div class="gc-team away">${teamMark(match.away)}</div><div class="gc-score-center"><div class="gc-score-num">${match.away.score} – ${match.home.score}</div><div class="gc-status">${matchStatus(match)}</div></div><div class="gc-team home">${teamMark(match.home)}</div>`);
+  setHtmlIfChanged(document.querySelector('#context'), `<span>${esc(match.competition)}</span><span>${esc(match.stadium)}</span><span>Matchweek ${match.matchDay}</span>`);
+  setHtmlIfChanged(document.querySelector('#away'), playerList(matchCenter.away));
+  setHtmlIfChanged(document.querySelector('#home'), playerList(matchCenter.home));
+  setHtmlIfChanged(document.querySelector('#timeline'), matchCenter.events.slice(0, 20).map(event => `<div class="pitch-item"><strong>${esc(event.minute)}' · ${esc(event.description)}</strong><span class="muted">${esc(event.teamName)}</span></div>`).join(''));
+  setHtmlIfChanged(document.querySelector('#stats'), `<div class="soccer-table-scroll"><table class="soccer-data-table team-statistics-table"><thead><tr><th>Team</th><th>Possession</th><th>Shots</th><th>On Target</th><th>xG</th><th>Corners</th><th>Fouls</th><th>Cards</th></tr></thead><tbody>${matchCenter.teamStatistics.map(stat => `<tr><td>${esc(stat.teamName)}</td><td>${stat.possession.toFixed(1)}%</td><td>${stat.shots}</td><td>${stat.shotsOnTarget}</td><td>${stat.expectedGoals.toFixed(2)}</td><td>${stat.corners}</td><td>${stat.fouls}</td><td>${stat.yellowCards}Y ${stat.redCards}R</td></tr>`).join('')}</tbody></table></div>`);
+  setHtmlIfChanged(document.querySelector('#shot-map'), shotMap(matchCenter));
 }
 
 function showError(error) {

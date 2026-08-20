@@ -12,9 +12,9 @@
     <AssemblyTitle>VITEC Soccer Scoreboard Video Output</AssemblyTitle>
     <Product>VITEC Soccer Scoreboard</Product>
     <Description>VITEC Soccer Scoreboard multicast and SRT video renderer</Description>
-    <Version>0.2.6</Version>
-    <AssemblyVersion>0.2.6.0</AssemblyVersion>
-    <FileVersion>0.2.6.0</FileVersion>
+    <Version>0.2.7</Version>
+    <AssemblyVersion>0.2.7.0</AssemblyVersion>
+    <FileVersion>0.2.7.0</FileVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CefSharp.OffScreen.NETCore" Version="150.0.110" />

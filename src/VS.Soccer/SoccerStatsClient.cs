@@ -45,6 +45,7 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
                 new SoccerSide(scheduled.Home, "", []),
                 ReadEvents(eventsDoc.RootElement),
                 ReadTeamStatistics(statsDoc.RootElement),
+                null,
                 DateTimeOffset.UtcNow);
         }
         var homeNode = matchDoc.RootElement.GetProperty("home");
@@ -57,6 +58,7 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
             ReadSide(homeNode, match.Home),
             ReadEvents(eventsDoc.RootElement),
             ReadTeamStatistics(statsDoc.RootElement),
+            ReadConditions(matchDoc.RootElement),
             DateTimeOffset.UtcNow);
     }
 
@@ -180,6 +182,13 @@ public sealed class SoccerStatsClient(HttpClient httpClient, IOptions<SoccerStat
         var home = ReadTeam(homeNode, I(info,"home_team_goals"), "home");
         var away = ReadTeam(awayNode, I(info,"away_team_goals"), "away");
         return new SoccerMatch(S(info,"match_id"), D(info,"planned_kickoff_time"), S(info,"match_status"), S(info,"minute_of_play"), S(info,"competition_name"), S(info,"season_id"), I(info,"match_day"), S(environment,"stadium_name"), S(environment,"city"), away, home);
+    }
+
+    private static SoccerMatchConditions? ReadConditions(JsonElement root)
+    {
+        if (!root.TryGetProperty("environment", out var env) || env.ValueKind != JsonValueKind.Object) return null;
+        var address = string.Join(", ", new[] { S(env,"stadium_address"), S(env,"city"), S(env,"postal_code") }.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase));
+        return new SoccerMatchConditions(NDouble(env,"temperature"),NDouble(env,"air_humidity"),NDouble(env,"air_pressure"),S(env,"precipitation"),S(env,"roof"),S(env,"floodlight"),S(env,"pitch_erosion"),NI(env,"number_of_spectators"),NI(env,"stadium_capacity"),env.TryGetProperty("sold_out",out var soldOut)?soldOut.ValueKind==JsonValueKind.True?true:soldOut.ValueKind==JsonValueKind.False?false:null:null,address);
     }
 
     private static SoccerTeam ReadTeam(JsonElement node, int score, string role)

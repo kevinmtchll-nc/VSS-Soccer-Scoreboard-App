@@ -15,7 +15,11 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({
 }[character]));
 const setHtmlIfChanged = (element, html) => { if (element.innerHTML !== html) element.innerHTML = html; };
 
-const playerList = side => `<h3>${esc(side.team.name)} · ${esc(side.formation)}</h3><div class="soccer-table-scroll"><table class="soccer-data-table lineup-table"><colgroup><col class="number-col"><col class="player-col"><col class="position-col"></colgroup><thead><tr><th>#</th><th>Player</th><th>Position</th></tr></thead><tbody>${side.players.filter(player => player.isStarter).map(player => `<tr><td>${player.shirtNumber ?? ''}</td><td>${esc(player.firstName)} ${esc(player.lastName)}${player.isCaptain ? ' (C)' : ''}</td><td>${esc(player.position)}</td></tr>`).join('')}</tbody></table></div>`;
+const playerList = side => `<h3>${esc(side.team.name)} · ${esc(side.formation)}</h3><div class="soccer-table-scroll"><table class="soccer-data-table lineup-table"><colgroup><col class="number-col"><col class="player-col"><col class="position-col"></colgroup><thead><tr><th>#</th><th>Player</th><th>Position</th></tr></thead><tbody>${side.players.filter(player => player.isStarter).map(player => `<tr><td>${player.shirtNumber ?? ''}</td><td><span class="lineup-player"><img class="lineup-headshot" src="/api/soccer/player-headshot?playerId=${encodeURIComponent(player.personId)}" alt="" onerror="this.hidden=true">${esc(player.firstName)} ${esc(player.lastName)}${player.isCaptain ? ' (C)' : ''}</span></td><td>${esc(player.position)}</td></tr>`).join('')}</tbody></table></div>`;
+
+let conditionSelection={temperature:true,humidity:true,airPressure:true,precipitation:true,roof:true,floodlights:true,pitchCondition:true,attendance:true,stadiumCapacity:true,capacityPercent:true,soldOut:true,stadiumAddress:true};
+const conditionCard=(label,value)=>value===null||value===undefined||value===''?'':`<div class="match-condition"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+function matchConditions(value){if(!value)return '<p class="muted">Match-condition data is not available yet.</p>';const cards=[];if(conditionSelection.temperature&&value.temperatureC!=null)cards.push(conditionCard('Temperature',`${Math.round(value.temperatureC*9/5+32)}°F / ${Number(value.temperatureC).toFixed(0)}°C`));if(conditionSelection.humidity&&value.humidityPercent!=null)cards.push(conditionCard('Humidity',`${value.humidityPercent}%`));if(conditionSelection.airPressure&&value.airPressureHpa!=null)cards.push(conditionCard('Air pressure',`${value.airPressureHpa} hPa`));if(conditionSelection.precipitation)cards.push(conditionCard('Precipitation',value.precipitation));if(conditionSelection.roof)cards.push(conditionCard('Roof',value.roof));if(conditionSelection.floodlights)cards.push(conditionCard('Floodlights',value.floodlights));if(conditionSelection.pitchCondition)cards.push(conditionCard('Pitch condition',value.pitchCondition));if(conditionSelection.attendance&&value.attendance!=null)cards.push(conditionCard('Attendance',Number(value.attendance).toLocaleString('en-US')));if(conditionSelection.stadiumCapacity&&value.stadiumCapacity!=null)cards.push(conditionCard('Stadium capacity',Number(value.stadiumCapacity).toLocaleString('en-US')));if(conditionSelection.capacityPercent&&value.attendance!=null&&value.stadiumCapacity)cards.push(conditionCard('Capacity used',`${(value.attendance*100/value.stadiumCapacity).toFixed(1)}%`));if(conditionSelection.soldOut&&value.soldOut!=null)cards.push(conditionCard('Sold out',value.soldOut?'Yes':'No'));if(conditionSelection.stadiumAddress)cards.push(conditionCard('Stadium address',value.stadiumAddress));return cards.join('')||'<p class="muted">All Match Conditions fields are disabled in Settings.</p>';}
 
 const shotMapView = document.querySelector('#shot-map-view');
 const shotMapStyle = document.querySelector('#shot-map-style');
@@ -145,6 +149,7 @@ async function load() {
   const match = matchCenter.match;
   setHtmlIfChanged(document.querySelector('#score'), `<div class="gc-team away">${teamMark(match.away)}</div><div class="gc-score-center"><div class="gc-score-num">${match.away.score} – ${match.home.score}</div><div class="gc-status">${matchStatus(match)}</div></div><div class="gc-team home">${teamMark(match.home)}</div>`);
   setHtmlIfChanged(document.querySelector('#context'), `<span>${esc(match.competition)}</span><span>${esc(match.stadium)}</span><span>Matchweek ${match.matchDay}</span>`);
+  setHtmlIfChanged(document.querySelector('#conditions'), matchConditions(matchCenter.conditions));
   setHtmlIfChanged(document.querySelector('#away'), playerList(matchCenter.away));
   setHtmlIfChanged(document.querySelector('#home'), playerList(matchCenter.home));
   setHtmlIfChanged(document.querySelector('#timeline'), matchCenter.events.slice(0, 20).map(event => `<div class="pitch-item"><strong>${esc(event.minute)}' · ${esc(event.description)}</strong><span class="muted">${esc(event.teamName)}</span></div>`).join(''));
@@ -157,5 +162,5 @@ function showError(error) {
 }
 
 document.querySelector('#refresh').addEventListener('click', () => load().catch(showError));
-load().catch(showError);
+fetch('/api/soccer/match-condition-settings',{cache:'no-store'}).then(response=>response.json()).then(value=>{conditionSelection={...conditionSelection,...value};return load();}).catch(()=>load().catch(showError));
 setInterval(() => load().catch(showError), 30000);

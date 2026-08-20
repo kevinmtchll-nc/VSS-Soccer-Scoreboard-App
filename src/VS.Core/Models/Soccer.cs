@@ -21,6 +21,19 @@ public sealed record SoccerMatch(
     SoccerTeam Away,
     SoccerTeam Home);
 
+public sealed record SoccerMatchConditions(
+    double? TemperatureC,
+    double? HumidityPercent,
+    double? AirPressureHpa,
+    string Precipitation,
+    string Roof,
+    string Floodlights,
+    string PitchCondition,
+    int? Attendance,
+    int? StadiumCapacity,
+    bool? SoldOut,
+    string StadiumAddress);
+
 public sealed record SoccerPlayer(
     string PersonId,
     string FirstName,
@@ -78,6 +91,7 @@ public sealed record SoccerMatchCenter(
     SoccerSide Home,
     IReadOnlyList<SoccerEvent> Events,
     IReadOnlyList<SoccerTeamStatistics> TeamStatistics,
+    SoccerMatchConditions? Conditions,
     DateTimeOffset UpdatedAt);
 
 public sealed record SoccerStanding(

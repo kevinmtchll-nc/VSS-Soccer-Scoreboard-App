@@ -1371,6 +1371,63 @@ app.MapPost("/api/soccer/team-logo/settings", async (HttpContext context) =>
     return Results.Ok(new { message = "Sportradar Images API settings saved.", configured = !string.IsNullOrWhiteSpace(apiKey) });
 });
 
+var playerHeadshotDirectory = Path.Combine(vsConfigDirectory, "player-headshots");
+Directory.CreateDirectory(playerHeadshotDirectory);
+app.MapGet("/api/soccer/player-headshot", (string playerId) =>
+{
+    var safeId = new string((playerId ?? "").Where(character => char.IsLetterOrDigit(character) || character is '-' or '_').ToArray());
+    if (string.IsNullOrWhiteSpace(safeId)) return Results.BadRequest();
+    var path = Directory.EnumerateFiles(playerHeadshotDirectory, safeId + ".*").FirstOrDefault();
+    if (path is null) return Results.NotFound();
+    var contentType = Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/jpeg";
+    return Results.File(path, contentType, enableRangeProcessing: false);
+});
+
+app.MapPost("/api/soccer/player-headshots/download", async (HttpContext context, string matchId, string? date, ISoccerStatsClient soccer, IHttpClientFactory clients, CancellationToken ct) =>
+{
+    if (!IsLocalRequest(context)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+    var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
+    var center = await soccer.GetMatchCenterAsync(matchId, target, ct);
+    var players = center.Away.Players.Concat(center.Home.Players).Where(player => !string.IsNullOrWhiteSpace(player.PersonId)).GroupBy(player => player.PersonId).Select(group => group.First()).ToList();
+    var clubAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Los Angeles Football Club"] = "los-angeles-football-club", ["New York City Football Club"] = "new-york-city-fc", ["CF Montréal"] = "cf-montreal", ["St. Louis CITY SC"] = "st-louis-city-sc" };
+    string ClubSlug(string name) { if (clubAliases.TryGetValue(name, out var alias)) return alias; var normalized = name.Normalize(NormalizationForm.FormD); return string.Join('-', new string(normalized.Where(character => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(character) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant().Split([' ','.','/','&'], StringSplitOptions.RemoveEmptyEntries).Select(part => new string(part.Where(char.IsLetterOrDigit).ToArray())).Where(part => part.Length > 0)); }
+    var pages = new List<string>();
+    var http = clients.CreateClient();
+    foreach (var team in new[] { center.Away.Team, center.Home.Team })
+    {
+        try { pages.Add(System.Net.WebUtility.HtmlDecode(await http.GetStringAsync($"https://www.mlssoccer.com/clubs/{ClubSlug(team.Name)}/roster/", ct))); }
+        catch (HttpRequestException) { }
+    }
+    var downloaded = new List<object>(); var missing = new List<object>();
+    foreach (var player in players)
+    {
+        string? imageUrl = null;
+        foreach (var page in pages)
+        {
+            var idPattern = "\"title\"\\s*:\\s*\"[^\"]*" + System.Text.RegularExpressions.Regex.Escape(player.PersonId) + "[^\"]*\"[\\s\\S]{0,1200}?\"thumbnailUrl\"\\s*:\\s*\"(?<url>https://images\\.mlssoccer\\.com/[^\"]+)\"";
+            var match = System.Text.RegularExpressions.Regex.Match(page, idPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success)
+            {
+                var fullName = System.Text.RegularExpressions.Regex.Escape(($"{player.FirstName} {player.LastName}").Trim());
+                var namePattern = "\"fullName\"\\s*:\\s*\"" + fullName + "\"[\\s\\S]{0,1600}?\"thumbnailUrl\"\\s*:\\s*\"(?<url>https://images\\.mlssoccer\\.com/[^\"]+)\"";
+                match = System.Text.RegularExpressions.Regex.Match(page, namePattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            }
+            if (match.Success) { imageUrl = match.Groups["url"].Value.Replace("\\/", "/"); break; }
+        }
+        if (imageUrl is null) { missing.Add(new { playerId = player.PersonId, name = $"{player.FirstName} {player.LastName}".Trim() }); continue; }
+        try
+        {
+            using var response = await http.GetAsync(imageUrl, ct); response.EnsureSuccessStatusCode();
+            var mediaType = response.Content.Headers.ContentType?.MediaType ?? ""; if (!mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("MLS response was not an image.");
+            var extension = mediaType.Contains("png", StringComparison.OrdinalIgnoreCase) ? ".png" : ".jpg";
+            await File.WriteAllBytesAsync(Path.Combine(playerHeadshotDirectory, player.PersonId + extension), await response.Content.ReadAsByteArrayAsync(ct), ct);
+            downloaded.Add(new { playerId = player.PersonId, name = $"{player.FirstName} {player.LastName}".Trim(), source = imageUrl });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException) { missing.Add(new { playerId = player.PersonId, name = $"{player.FirstName} {player.LastName}".Trim() }); }
+    }
+    return Results.Ok(new { message = $"Downloaded {downloaded.Count} MLS player headshots; {missing.Count} were unavailable.", matchId, directory = playerHeadshotDirectory, downloaded, missing });
+});
+
 app.MapGet("/api/soccer/standings", async (ISoccerStatsClient soccer, IMemoryCache cache, CancellationToken ct) =>
 {
     const string key = "soccer:standings";
@@ -1522,12 +1579,72 @@ app.MapPost("/api/soccer/workspaces", async (HttpRequest request, SoccerWorkspac
 });
 app.MapDelete("/api/soccer/workspaces/{id}", (string id, SoccerWorkspaceStore store) => id.Equals("default", StringComparison.OrdinalIgnoreCase) ? Results.BadRequest(new { message = "The default workspace cannot be deleted." }) : store.Delete(id) ? Results.Ok() : Results.NotFound());
 
+var conditionSettingsPath = Path.Combine(vsConfigDirectory, "match-conditions.json");
+string[] conditionFieldNames = ["temperature", "humidity", "airPressure", "precipitation", "roof", "floodlights", "pitchCondition", "attendance", "stadiumCapacity", "capacityPercent", "soldOut", "stadiumAddress"];
+Dictionary<string, bool> LoadConditionSelection()
+{
+    var result = conditionFieldNames.ToDictionary(name => name, _ => true, StringComparer.OrdinalIgnoreCase);
+    try
+    {
+        if (!File.Exists(conditionSettingsPath)) return result;
+        var saved = JsonNode.Parse(File.ReadAllText(conditionSettingsPath))?.AsObject();
+        if (saved is null) return result;
+        foreach (var name in conditionFieldNames) if (saved[name] is JsonValue value && value.TryGetValue<bool>(out var enabled)) result[name] = enabled;
+    }
+    catch { }
+    return result;
+}
+Dictionary<string, object?> ProjectConditions(SoccerMatchConditions? value, Dictionary<string, bool> enabled)
+{
+    var output = new Dictionary<string, object?>();
+    if (value is null) return output;
+    void Add(string name, object? item) { if (enabled.GetValueOrDefault(name) && item is not null && (!(item is string text) || !string.IsNullOrWhiteSpace(text))) output[name] = item; }
+    Add("temperature", value.TemperatureC is null ? null : new { celsius = value.TemperatureC, fahrenheit = Math.Round(value.TemperatureC.Value * 9 / 5 + 32, 1) });
+    Add("humidity", value.HumidityPercent);
+    Add("airPressure", value.AirPressureHpa);
+    Add("precipitation", value.Precipitation);
+    Add("roof", value.Roof);
+    Add("floodlights", value.Floodlights);
+    Add("pitchCondition", value.PitchCondition);
+    Add("attendance", value.Attendance);
+    Add("stadiumCapacity", value.StadiumCapacity);
+    Add("capacityPercent", value.Attendance is null || value.StadiumCapacity is null || value.StadiumCapacity == 0 ? null : Math.Round(value.Attendance.Value * 100d / value.StadiumCapacity.Value, 1));
+    Add("soldOut", value.SoldOut);
+    Add("stadiumAddress", value.StadiumAddress);
+    return output;
+}
+async Task<List<object>> LoadConditionFeedAsync(IReadOnlyList<SoccerMatch> matches, DateOnly target, ISoccerStatsClient soccer, Dictionary<string, bool> enabled, CancellationToken ct)
+{
+    var output = new List<object>();
+    foreach (var match in matches)
+    {
+        try { var center = await soccer.GetMatchCenterAsync(match.MatchId, target, ct); output.Add(new { matchId = match.MatchId, fields = ProjectConditions(center.Conditions, enabled) }); }
+        catch (Exception ex) when (ex is HttpRequestException or KeyNotFoundException) { output.Add(new { matchId = match.MatchId, fields = new Dictionary<string, object?>() }); }
+    }
+    return output;
+}
+app.MapGet("/api/soccer/match-condition-settings", () => Results.Ok(LoadConditionSelection()));
+app.MapPost("/api/soccer/match-condition-settings", async (HttpRequest request, CancellationToken ct) =>
+{
+    try
+    {
+        using var document = await JsonDocument.ParseAsync(request.Body, cancellationToken: ct);
+        var saved = new JsonObject();
+        foreach (var name in conditionFieldNames) saved[name] = document.RootElement.TryGetProperty(name, out var node) && node.ValueKind == JsonValueKind.True;
+        await File.WriteAllTextAsync(conditionSettingsPath, saved.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+        return Results.Ok(new { message = "Match Conditions display and DSM feed fields saved." });
+    }
+    catch (Exception ex) { return Results.BadRequest(new { message = ex.Message }); }
+});
+
 app.MapGet("/api/integrations/soccer/feed", async (string? date, string? matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
 {
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
     var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
-    return Results.Ok(new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.0", generatedAt = DateTimeOffset.UtcNow, date = target, matches, selectedMatch = selected });
+    var enabled = LoadConditionSelection();
+    var matchConditions = await LoadConditionFeedAsync(matches, target, soccer, enabled, ct);
+    return Results.Ok(new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.1", generatedAt = DateTimeOffset.UtcNow, date = target, matches, matchConditions, selectedMatch = selected is null ? null : new { match = selected.Match, away = selected.Away, home = selected.Home, events = selected.Events, teamStatistics = selected.TeamStatistics, conditions = ProjectConditions(selected.Conditions, enabled), selected.UpdatedAt } });
 });
 
 app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? matchId, ISoccerStatsClient soccer, CancellationToken ct) =>
@@ -1535,10 +1652,14 @@ app.MapGet("/api/integrations/soccer/feed.xml", async (string? date, string? mat
     var target = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
     var matches = await soccer.GetScheduleAsync(target, ct);
     var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, target, ct);
+    var enabled = LoadConditionSelection();
+    var matchConditions = await LoadConditionFeedAsync(matches, target, soccer, enabled, ct);
     static XElement Team(string name, SoccerTeam team) => new(name, new XAttribute("id", team.TeamId), new XElement("name", team.Name), new XElement("code", team.Code), new XElement("score", team.Score));
-    var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.0"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", target.ToString("yyyy-MM-dd")),
+    XElement Conditions(Dictionary<string, object?> fields) => new("conditions", fields.Select(field => field.Value is null ? null : new XElement(field.Key, JsonSerializer.Serialize(field.Value).Trim('"'))));
+    var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.1"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", target.ToString("yyyy-MM-dd")),
         new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), new XElement("competition", m.Competition), Team("away", m.Away), Team("home", m.Home)))),
-        selected is null ? null : new XElement("selectedMatch", new XAttribute("id", selected.Match.MatchId), new XElement("events", selected.Events.Select(e => new XElement("event", new XAttribute("id", e.EventId), new XAttribute("type", e.Type), new XElement("minute", e.Minute), new XElement("team", e.TeamName), new XElement("player", e.PlayerName), new XElement("description", e.Description), e.ExpectedGoals is null ? null : new XElement("expectedGoals", e.ExpectedGoals)))))));
+        new XElement("matchConditions", matchConditions.Select(item => { var json = JsonSerializer.SerializeToElement(item); var fields = json.GetProperty("fields").Deserialize<Dictionary<string, object?>>() ?? []; return new XElement("match", new XAttribute("id", json.GetProperty("matchId").GetString() ?? ""), Conditions(fields)); })),
+        selected is null ? null : new XElement("selectedMatch", new XAttribute("id", selected.Match.MatchId), Conditions(ProjectConditions(selected.Conditions, enabled)), new XElement("events", selected.Events.Select(e => new XElement("event", new XAttribute("id", e.EventId), new XAttribute("type", e.Type), new XElement("minute", e.Minute), new XElement("team", e.TeamName), new XElement("player", e.PlayerName), new XElement("description", e.Description), e.ExpectedGoals is null ? null : new XElement("expectedGoals", e.ExpectedGoals)))))));
     return Results.Text(xml.ToString(), "application/xml");
 });
 
@@ -1598,17 +1719,20 @@ app.MapPost("/api/integrations/eztv-dsm/push", async (string? date, string? matc
         var targetDate = DateOnly.TryParse(date, out var parsed) ? parsed : DateOnly.FromDateTime(DateTime.Today);
         var matches = await soccer.GetScheduleAsync(targetDate, ct);
         var selected = string.IsNullOrWhiteSpace(matchId) ? null : await soccer.GetMatchCenterAsync(matchId, targetDate, ct);
+        var enabled = LoadConditionSelection();
+        var matchConditions = await LoadConditionFeedAsync(matches, targetDate, soccer, enabled, ct);
         var format = settings["format"]?.GetValue<string>()?.Equals("xml", StringComparison.OrdinalIgnoreCase) == true ? "xml" : "json";
         HttpContent content;
         if (format == "xml")
         {
             static XElement DsmTeam(string name, SoccerTeam team) => new(name, new XAttribute("id", team.TeamId), new XElement("name", team.Name), new XElement("code", team.Code), new XElement("score", team.Score));
-            var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.0"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", targetDate.ToString("yyyy-MM-dd")), new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), DsmTeam("away", m.Away), DsmTeam("home", m.Home))))));
+            XElement DsmConditions(Dictionary<string, object?> fields) => new("conditions", fields.Select(field => field.Value is null ? null : new XElement(field.Key, JsonSerializer.Serialize(field.Value).Trim('"'))));
+            var xml = new XDocument(new XElement("vitecSoccerScoreboard", new XAttribute("schemaVersion", "1.1"), new XElement("generatedAt", DateTimeOffset.UtcNow.ToString("O")), new XElement("date", targetDate.ToString("yyyy-MM-dd")), new XElement("matches", matches.Select(m => new XElement("match", new XAttribute("id", m.MatchId), new XElement("kickoff", m.PlannedKickoff.ToString("O")), new XElement("status", m.Status), new XElement("minute", m.Minute), DsmTeam("away", m.Away), DsmTeam("home", m.Home)))), new XElement("matchConditions", matchConditions.Select(item => { var json = JsonSerializer.SerializeToElement(item); var fields = json.GetProperty("fields").Deserialize<Dictionary<string, object?>>() ?? []; return new XElement("match", new XAttribute("id", json.GetProperty("matchId").GetString() ?? ""), DsmConditions(fields)); })), selected is null ? null : new XElement("selectedMatch", new XAttribute("id", selected.Match.MatchId), DsmConditions(ProjectConditions(selected.Conditions, enabled)))));
             content = new StringContent(xml.ToString(), Encoding.UTF8, "application/xml");
         }
         else
         {
-            var payload = new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.0", generatedAt = DateTimeOffset.UtcNow, date = targetDate, matches, selectedMatch = selected };
+            var payload = new { source = "VITEC Soccer Scoreboard", schemaVersion = "1.1", generatedAt = DateTimeOffset.UtcNow, date = targetDate, matches, matchConditions, selectedMatch = selected is null ? null : new { match = selected.Match, away = selected.Away, home = selected.Home, events = selected.Events, teamStatistics = selected.TeamStatistics, conditions = ProjectConditions(selected.Conditions, enabled), selected.UpdatedAt } };
             content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
         }
         using var message = new HttpRequestMessage(HttpMethod.Post, target) { Content = content };
